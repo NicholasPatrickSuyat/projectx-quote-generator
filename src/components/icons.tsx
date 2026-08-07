@@ -113,6 +113,105 @@ export function IconBuilding(props: IconProps) {
   );
 }
 
+export function IconPlus(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
+export function IconUserPlus(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="3.5" />
+      <path d="M19 8v6" />
+      <path d="M22 11h-6" />
+    </svg>
+  );
+}
+
+export function IconFilePlus(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M12 11v6" />
+      <path d="M9 14h6" />
+    </svg>
+  );
+}
+
+export function IconFileText(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M9 13h6" />
+      <path d="M9 17h6" />
+    </svg>
+  );
+}
+
+export function IconSend(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M22 2L11 13" />
+      <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+    </svg>
+  );
+}
+
+export function IconCheckCircle(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 12.5l2.5 2.5 4.5-5" />
+    </svg>
+  );
+}
+
+export function IconXCircle(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9 9l6 6" />
+      <path d="M15 9l-6 6" />
+    </svg>
+  );
+}
+
+export function IconClock(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+export function IconAlert(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+      <path d="M10.3 3.9L2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0z" />
+    </svg>
+  );
+}
+
+export function IconCurrency(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v10" />
+      <path d="M15 9.5c0-1.1-1.3-2-3-2s-3 .9-3 2 1.3 2 3 2 3 .9 3 2-1.3 2-3 2-3-.9-3-2" />
+    </svg>
+  );
+}
+
 export const navIcons = {
   dashboard: IconDashboard,
   customers: IconCustomers,
