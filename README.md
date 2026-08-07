@@ -1,15 +1,20 @@
 # Quote Generator Pro
 
-Professional quote generation for service businesses (HVAC, Plumbing, Roofing, Electrical, Construction, Landscaping, and similar industries).
+Professional quote generation for service businesses such as HVAC, plumbing, roofing, electrical, and construction.
 
-## Stack
+## Status
 
-- Next.js (App Router)
+🚧 In Development
+
+## Tech Stack
+
+- Next.js
 - TypeScript
 - Tailwind CSS
-- ESLint
+- Git
+- GitHub
 
-## Getting started
+## Getting Started
 
 ```bash
 npm install
@@ -18,19 +23,21 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Scripts
+## Documentation
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start the development server |
-| `npm run build` | Create a production build |
-| `npm run start` | Run the production server |
-| `npm run lint` | Run ESLint |
+| Document | Description |
+|----------|-------------|
+| [Product Specification](docs/01%20-%20Product%20Specification.md) | Primary product reference for development |
+| [Project Structure](docs/project-structure.md) | Codebase layout and conventions |
 
-## Project structure
+## Roadmap
 
-See [docs/project-structure.md](docs/project-structure.md).
-
-## Status
-
-Milestone 1 — project foundation only. No authentication, database, or business features yet.
+- [x] Project Initialization
+- [ ] Product Specification
+- [ ] Authentication
+- [ ] Database
+- [ ] Customer Module
+- [ ] Quote Module
+- [ ] PDF Generator
+- [ ] Dashboard
+- [ ] Deployment
