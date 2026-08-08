@@ -1,7 +1,6 @@
-import { PageContainer } from "@/components/layout/page-container";
-import { PageHeader } from "@/components/layout/page-header";
-import { PlaceholderPanel } from "@/components/layout/placeholder-panel";
+import { CustomersView } from "@/components/customers/customers-view";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "Customers",
@@ -9,15 +8,16 @@ export const metadata: Metadata = {
 
 export default function CustomersPage() {
   return (
-    <PageContainer>
-      <PageHeader
-        title="Customers"
-        description="Reusable customer records for quoting. List, search, and forms will arrive in a later milestone."
-      />
-      <PlaceholderPanel
-        title="Customers coming soon"
-        description="This is an empty shell placeholder. Customer management is not implemented yet."
-      />
-    </PageContainer>
+    <Suspense
+      fallback={
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 sm:p-6 lg:p-8">
+          <div className="h-10 w-48 animate-pulse rounded-[var(--radius-md)] bg-bg-muted" />
+          <div className="h-10 w-full animate-pulse rounded-[var(--radius-md)] bg-bg-muted" />
+          <div className="h-72 w-full animate-pulse rounded-[var(--radius-md)] bg-bg-muted" />
+        </div>
+      }
+    >
+      <CustomersView />
+    </Suspense>
   );
 }

@@ -18,7 +18,7 @@ const actions = [
   },
   {
     label: "New Customer",
-    href: "/customers?action=new",
+    href: "/customers?create=1",
     icon: IconUserPlus,
   },
   {

@@ -212,6 +212,43 @@ export function IconCurrency(props: IconProps) {
   );
 }
 
+export function IconMore(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <circle cx="12" cy="5" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.25" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function IconChevronUp(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M6 14l6-6 6 6" />
+    </svg>
+  );
+}
+
+export function IconChevronDown(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M6 10l6 6 6-6" />
+    </svg>
+  );
+}
+
+export function IconUsersEmpty(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="3.5" />
+      <path d="M19 8v6" />
+      <path d="M22 11h-6" />
+    </svg>
+  );
+}
+
 export const navIcons = {
   dashboard: IconDashboard,
   customers: IconCustomers,

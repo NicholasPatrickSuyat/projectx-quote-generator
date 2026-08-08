@@ -31,6 +31,8 @@
   --px-status-rejected-text: #991b1b;
   --px-status-expired-bg: #ffedd5;
   --px-status-expired-text: #9a3412;
+  --px-status-archived-bg: #e2e8f0;
+  --px-status-archived-text: #1e293b;
 
   --radius-md: 10px;
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.04);
