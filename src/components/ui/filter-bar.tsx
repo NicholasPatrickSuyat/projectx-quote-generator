@@ -9,12 +9,14 @@ type ActiveArchivedToggleProps = {
   value: ArchiveToggleValue;
   onChange: (value: ArchiveToggleValue) => void;
   className?: string;
+  ariaLabel?: string;
 };
 
 export function ActiveArchivedToggle({
   value,
   onChange,
   className,
+  ariaLabel = "Record status",
 }: ActiveArchivedToggleProps) {
   return (
     <div
@@ -23,7 +25,7 @@ export function ActiveArchivedToggle({
         className,
       )}
       role="group"
-      aria-label="Customer status"
+      aria-label={ariaLabel}
     >
       {(
         [

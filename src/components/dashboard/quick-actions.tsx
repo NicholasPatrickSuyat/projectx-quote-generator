@@ -12,7 +12,7 @@ import Link from "next/link";
 const actions = [
   {
     label: "New Quote",
-    href: "/quotes?action=new",
+    href: "/quotes?create=1",
     icon: IconFilePlus,
     primary: true,
   },

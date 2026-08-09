@@ -54,7 +54,7 @@ export function SummaryMetricsCards({
     {
       label: "Expiring Within 7 Days",
       value: String(metrics.expiringWithin7Days),
-      href: "/quotes?expiring=7",
+      href: "/quotes?expiringSoon=1",
       icon: IconClock,
     },
   ];

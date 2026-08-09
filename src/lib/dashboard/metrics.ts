@@ -123,7 +123,8 @@ export function getNeedsAttention(
       number: quote.number,
       customerName: quote.customerName,
       meta: `Draft since ${formatShortDate(quote.createdAt)}`,
-      href: `/quotes?status=Draft&id=${quote.id}`,
+      // Filter-only deep-links until Dashboard/Quotes demo seeds are unified.
+      href: `/quotes?attention=drafts-stale`,
     }));
 
   const expiringSoon = active
@@ -141,7 +142,7 @@ export function getNeedsAttention(
       number: quote.number,
       customerName: quote.customerName,
       meta: `Expires ${formatShortDate(quote.expiresAt ?? quote.createdAt)}`,
-      href: `/quotes?expiring=7&id=${quote.id}`,
+      href: `/quotes?expiringSoon=1`,
     }));
 
   const recentlySent = active
@@ -153,7 +154,7 @@ export function getNeedsAttention(
       number: quote.number,
       customerName: quote.customerName,
       meta: `Sent ${formatShortDate(quote.sentAt ?? quote.createdAt)}`,
-      href: `/quotes?status=Sent&id=${quote.id}`,
+      href: `/quotes?attention=awaiting-response`,
     }));
 
   return { staleDrafts, expiringSoon, recentlySent };
