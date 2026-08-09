@@ -1,7 +1,7 @@
-import { DEMO_COMPANY_DEFAULTS } from "@/lib/company/demo-defaults";
 import { withRecalculatedTotals } from "@/lib/quotes/calculations";
 import { addDays, startOfDay, toIsoDate } from "@/lib/format";
 import { nextLineId, nextQuoteId } from "@/lib/quotes/demo-data";
+import type { CompanyQuoteDefaults } from "@/types/company";
 import type {
   DiscountType,
   LineCategory,
@@ -31,6 +31,7 @@ export function buildNewDraftQuote(
   existing: Quote[],
   today: Date,
   snapshot: QuoteCustomerSnapshot,
+  defaults: CompanyQuoteDefaults,
   overrides?: Partial<
     Pick<
       Quote,
@@ -47,7 +48,6 @@ export function buildNewDraftQuote(
   >,
 ): Quote {
   const todayIso = toIsoDate(startOfDay(today));
-  const defaults = DEMO_COMPANY_DEFAULTS;
   const draft: Quote = {
     id: nextQuoteId(existing),
     customerSnapshot: snapshot,
@@ -89,9 +89,9 @@ export function duplicateQuote(
   source: Quote,
   existing: Quote[],
   today: Date,
+  defaults: CompanyQuoteDefaults,
 ): Quote {
   const todayIso = toIsoDate(startOfDay(today));
-  const defaults = DEMO_COMPANY_DEFAULTS;
   const copy: Quote = {
     id: nextQuoteId(existing),
     customerSnapshot: source.customerSnapshot
@@ -204,9 +204,12 @@ export function markQuoteExpired(quote: Quote, today: Date): Quote {
   };
 }
 
-export function reactivateQuoteToDraft(quote: Quote, today: Date): Quote {
+export function reactivateQuoteToDraft(
+  quote: Quote,
+  today: Date,
+  defaults: CompanyQuoteDefaults,
+): Quote {
   const todayIso = toIsoDate(startOfDay(today));
-  const defaults = DEMO_COMPANY_DEFAULTS;
   return {
     ...quote,
     status: "Draft",

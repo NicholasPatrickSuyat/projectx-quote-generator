@@ -1,8 +1,9 @@
 "use client";
 
-import { navIcons } from "@/components/icons";
+import { navIcons, IconBuilding } from "@/components/icons";
+import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
 import { cn } from "@/lib/cn";
-import { DEMO_COMPANY_NAME, isNavActive, MAIN_NAV } from "@/lib/navigation";
+import { isNavActive, MAIN_NAV } from "@/lib/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -13,6 +14,11 @@ type SidebarProps = {
 
 export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const { ready, settings } = useCompanySettingsSession();
+  const companyName = ready
+    ? settings.companyName
+    : "Project X Mechanical Services";
+  const logo = ready ? settings.logo : null;
 
   return (
     <aside
@@ -62,10 +68,22 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="border-t border-border-default p-4">
-        <p className="text-xs font-medium text-text-muted">Demo company</p>
-        <p className="mt-1 truncate text-sm text-text-secondary">
-          {DEMO_COMPANY_NAME}
-        </p>
+        <p className="text-xs font-medium text-text-muted">Company</p>
+        <div className="mt-2 flex min-w-0 items-center gap-2.5">
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element -- session data URL logo
+            <img
+              src={logo.dataUrl}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-[var(--radius-md)] object-contain"
+            />
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">
+              <IconBuilding className="text-base" />
+            </span>
+          )}
+          <p className="truncate text-sm text-text-secondary">{companyName}</p>
+        </div>
       </div>
     </aside>
   );

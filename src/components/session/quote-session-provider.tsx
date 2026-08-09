@@ -1,5 +1,6 @@
 "use client";
 
+import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
 import { getDemoQuotes, nextQuoteId } from "@/lib/quotes/demo-data";
 import {
   archiveQuote,
@@ -82,6 +83,8 @@ function stampUpdatedAt(quote: Quote): Quote {
 }
 
 export function QuoteSessionProvider({ children }: { children: ReactNode }) {
+  const { ready: settingsReady, getQuoteDefaults } =
+    useCompanySettingsSession();
   const today = useClientToday();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [seeded, setSeeded] = useState(false);
@@ -112,7 +115,7 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       if (!today) {
         throw new Error("Quote session is not ready");
       }
-      return buildNewDraftQuote(quotes, today, snapshot);
+      return buildNewDraftQuote(quotes, today, snapshot, getQuoteDefaults());
     }
 
     function createDraft(snapshot: QuoteCustomerSnapshot, draft: Quote): Quote {
@@ -144,14 +147,14 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       setQuotes((prev) => {
         const source = prev.find((quote) => quote.id === id);
         if (!source) return prev;
-        copy = duplicateQuote(source, prev, today);
+        copy = duplicateQuote(source, prev, today, getQuoteDefaults());
         return [copy, ...prev];
       });
       return copy;
     }
 
     return {
-      ready: seeded,
+      ready: seeded && settingsReady,
       today,
       quotes,
       getQuote,
@@ -166,9 +169,12 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       markAccepted: (id) => mutate(id, markQuoteAccepted),
       markRejected: (id) => mutate(id, markQuoteRejected),
       markExpired: (id) => mutate(id, markQuoteExpired),
-      reactivate: (id) => mutate(id, reactivateQuoteToDraft),
+      reactivate: (id) =>
+        mutate(id, (quote, day) =>
+          reactivateQuoteToDraft(quote, day, getQuoteDefaults()),
+        ),
     };
-  }, [quotes, seeded, today]);
+  }, [quotes, seeded, today, settingsReady, getQuoteDefaults]);
 
   return (
     <QuoteSessionContext.Provider value={value}>

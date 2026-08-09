@@ -18,6 +18,7 @@ import { FormField, fieldControlProps } from "@/components/ui/form-field";
 import { Input, Textarea } from "@/components/ui/input";
 import { SlideOver } from "@/components/ui/slide-over";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
 import { useCustomerSession } from "@/components/session/customer-session-provider";
 import { useQuoteSession } from "@/components/session/quote-session-provider";
 import {
@@ -29,7 +30,6 @@ import {
   validateCustomerForm,
   type CustomerFieldErrors,
 } from "@/lib/customers/filters";
-import { DEMO_COMPANY_DEFAULTS } from "@/lib/company/demo-defaults";
 import {
   computeLineTotal,
   withRecalculatedTotals,
@@ -178,6 +178,7 @@ export function QuoteBuilderView({
   } = useQuoteSession();
   const { ready: customersReady, customers, getCustomer, createCustomer } =
     useCustomerSession();
+  const { getQuoteDefaults } = useCompanySettingsSession();
 
   const [initialized, setInitialized] = useState(false);
   const [draft, setDraft] = useState<Quote | null>(null);
@@ -1097,13 +1098,16 @@ export function QuoteBuilderView({
       <ConfirmDialog
         open={confirm?.type === "reactivate"}
         title="Reactivate quote?"
-        description={`This returns the quote to Draft and extends valid until by ${DEMO_COMPANY_DEFAULTS.quoteValidityDays} days.`}
+        description={`This returns the quote to Draft and extends valid until by ${getQuoteDefaults().quoteValidityDays} days.`}
         confirmLabel="Reactivate"
         tone="primary"
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
-          persistAndMutate(reactivateQuoteToDraft);
+          const defaults = getQuoteDefaults();
+          persistAndMutate((quote, day) =>
+            reactivateQuoteToDraft(quote, day, defaults),
+          );
         }}
       />
 

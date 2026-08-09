@@ -8,7 +8,8 @@ import {
   IconSettings,
 } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
-import { DEMO_COMPANY_NAME } from "@/lib/navigation";
+import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
+import { formatCompanyCityState } from "@/types/company";
 import Link from "next/link";
 
 type TopBarProps = {
@@ -16,6 +17,15 @@ type TopBarProps = {
 };
 
 export function TopBar({ onMenuClick }: TopBarProps) {
+  const { ready, settings } = useCompanySettingsSession();
+  const companyName = ready
+    ? settings.companyName
+    : "Project X Mechanical Services";
+  const location = ready
+    ? formatCompanyCityState(settings.city, settings.state)
+    : "";
+  const logo = ready ? settings.logo : null;
+
   return (
     <header className="flex h-[var(--header-height)] shrink-0 items-center gap-3 border-b border-border-default bg-bg-surface px-3 sm:px-4 lg:px-6">
       <IconButton
@@ -27,14 +37,25 @@ export function TopBar({ onMenuClick }: TopBarProps) {
       </IconButton>
 
       <div className="hidden min-w-0 items-center gap-2.5 md:flex">
-        <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">
-          <IconBuilding className="text-base" />
-        </span>
+        {logo ? (
+          // eslint-disable-next-line @next/next/no-img-element -- session data URL logo
+          <img
+            src={logo.dataUrl}
+            alt=""
+            className="h-8 w-8 rounded-[var(--radius-md)] object-contain"
+          />
+        ) : (
+          <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">
+            <IconBuilding className="text-base" />
+          </span>
+        )}
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-text-primary">
-            {DEMO_COMPANY_NAME}
+            {companyName}
           </p>
-          <p className="truncate text-xs text-text-muted">Dallas, TX (Demo)</p>
+          {location ? (
+            <p className="truncate text-xs text-text-muted">{location}</p>
+          ) : null}
         </div>
       </div>
 
