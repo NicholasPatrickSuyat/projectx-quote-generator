@@ -20,7 +20,10 @@ import { SlideOver } from "@/components/ui/slide-over";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useCustomerSession } from "@/components/session/customer-session-provider";
 import { useQuoteSession } from "@/components/session/quote-session-provider";
-import type { CatalogItem } from "@/lib/catalog/demo-data";
+import {
+  catalogLineDescription,
+  type CatalogItem,
+} from "@/types/catalog";
 import { emptyCustomerForm } from "@/lib/customers/demo-data";
 import {
   validateCustomerForm,
@@ -121,10 +124,11 @@ function catalogItemsToLines(
 ): QuoteLineItem[] {
   let lines = [...existing];
   for (const item of items) {
+    const description = catalogLineDescription(item);
     const line: QuoteLineItem = {
       id: nextLineId(lines),
       category: item.category,
-      description: item.description,
+      description,
       quantity: 1,
       unitPrice: item.unitPrice,
       unit: item.unit,

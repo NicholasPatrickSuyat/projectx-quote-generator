@@ -1,17 +1,15 @@
 "use client";
 
 import { IconSearch } from "@/components/icons";
+import { useCatalogSession } from "@/components/session/catalog-session-provider";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/input";
 import { SlideOver } from "@/components/ui/slide-over";
-import {
-  DEMO_CATALOG_ITEMS,
-  filterCatalogItems,
-  type CatalogItem,
-} from "@/lib/catalog/demo-data";
+import { filterActiveCatalogForPicker } from "@/lib/catalog/filters";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import type { CatalogItem } from "@/types/catalog";
 import { LINE_CATEGORIES, type LineCategory } from "@/types/quote";
 import { useMemo, useState } from "react";
 
@@ -21,14 +19,47 @@ type CatalogPickerProps = {
   onAdd: (items: CatalogItem[]) => void;
 };
 
+function pruneSelectedIds(
+  selected: Set<string>,
+  items: CatalogItem[],
+): Set<string> {
+  const activeIds = new Set(
+    items.filter((item) => !item.archived).map((item) => item.id),
+  );
+  let changed = false;
+  const next = new Set<string>();
+  for (const id of selected) {
+    if (activeIds.has(id)) {
+      next.add(id);
+    } else {
+      changed = true;
+    }
+  }
+  return changed ? next : selected;
+}
+
 export function CatalogPicker({ open, onClose, onAdd }: CatalogPickerProps) {
+  const { ready, items } = useCatalogSession();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<LineCategory | "all">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [itemsSnapshot, setItemsSnapshot] = useState(items);
+
+  // Keep selection in sync when catalog items change (e.g. archived while open).
+  if (items !== itemsSnapshot) {
+    setItemsSnapshot(items);
+    const pruned = pruneSelectedIds(selected, items);
+    if (pruned !== selected) {
+      setSelected(pruned);
+    }
+  }
 
   const filtered = useMemo(
-    () => filterCatalogItems(DEMO_CATALOG_ITEMS, search, category),
-    [search, category],
+    () =>
+      ready
+        ? filterActiveCatalogForPicker(items, search, category)
+        : [],
+    [ready, items, search, category],
   );
 
   function toggleItem(id: string) {
@@ -48,9 +79,11 @@ export function CatalogPicker({ open, onClose, onAdd }: CatalogPickerProps) {
   }
 
   function handleAdd() {
-    const items = DEMO_CATALOG_ITEMS.filter((item) => selected.has(item.id));
-    if (items.length === 0) return;
-    onAdd(items);
+    const chosen = items.filter(
+      (item) => selected.has(item.id) && !item.archived,
+    );
+    if (chosen.length === 0) return;
+    onAdd(chosen);
     handleClose();
   }
 
@@ -58,7 +91,7 @@ export function CatalogPicker({ open, onClose, onAdd }: CatalogPickerProps) {
     <SlideOver
       open={open}
       title="Add from Catalog"
-      description="Search and select catalog items to add as line items."
+      description="Search and select active catalog items to add as line items."
       onClose={handleClose}
       wide
       footer={
@@ -109,9 +142,13 @@ export function CatalogPicker({ open, onClose, onAdd }: CatalogPickerProps) {
         </div>
 
         <ul className="divide-y divide-border-default rounded-[var(--radius-md)] border border-border-default">
-          {filtered.length === 0 ? (
+          {!ready ? (
             <li className="px-4 py-8 text-center text-sm text-text-secondary">
-              No catalog items match your search.
+              Loading catalog…
+            </li>
+          ) : filtered.length === 0 ? (
+            <li className="px-4 py-8 text-center text-sm text-text-secondary">
+              No active catalog items match your search.
             </li>
           ) : (
             filtered.map((item) => {
@@ -139,11 +176,14 @@ export function CatalogPicker({ open, onClose, onAdd }: CatalogPickerProps) {
                           {item.category}
                         </span>
                       </span>
-                      <span className="mt-0.5 block text-sm text-text-secondary">
-                        {item.description}
-                      </span>
+                      {item.description.trim() ? (
+                        <span className="mt-0.5 block text-sm text-text-secondary">
+                          {item.description}
+                        </span>
+                      ) : null}
                       <span className="mt-1 block text-sm font-medium text-text-primary">
-                        {formatCurrency(item.unitPrice)} / {item.unit}
+                        {formatCurrency(item.unitPrice)}
+                        {item.unit.trim() ? ` / ${item.unit}` : ""}
                       </span>
                     </span>
                   </label>
