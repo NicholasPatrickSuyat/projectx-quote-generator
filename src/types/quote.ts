@@ -8,6 +8,11 @@ export const QUOTE_STATUSES = [
 
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
 
+export const LINE_CATEGORIES = ["Services", "Materials", "Labor"] as const;
+export type LineCategory = (typeof LINE_CATEGORIES)[number];
+
+export type DiscountType = "none" | "percent" | "fixed";
+
 /** Lightweight quote shape used by the Dashboard demo metrics. */
 export type DemoQuote = {
   id: string;
@@ -34,15 +39,37 @@ export type QuoteCustomerSnapshot = {
   zip: string;
 };
 
-/** Full list/detail quote record for the Quotes module (session-only). */
+export type QuoteLineItem = {
+  id: string;
+  category: LineCategory;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  unit: string;
+  internalNotes: string;
+  sortOrder: number;
+  lineTotal: number;
+};
+
+/** Full quote record for Quotes list + Builder (session-only). */
 export type Quote = {
   id: string;
-  customerSnapshot: QuoteCustomerSnapshot;
+  customerSnapshot: QuoteCustomerSnapshot | null;
   jobDescription: string;
   status: QuoteStatus;
   quoteDate: string;
   validUntil: string | null;
   preparedBy: string;
+  internalNotes: string;
+  customerFacingMessage: string;
+  termsAndConditions: string;
+  taxRate: number;
+  discountType: DiscountType;
+  discountValue: number;
+  lineItems: QuoteLineItem[];
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
   grandTotal: number;
   createdAt: string;
   updatedAt: string;
@@ -70,4 +97,18 @@ export function quoteStatusTone(
     case "Expired":
       return "expired";
   }
+}
+
+export function emptyCustomerSnapshot(): QuoteCustomerSnapshot {
+  return {
+    customerId: "",
+    customerName: "",
+    companyName: "",
+    phone: "",
+    email: "",
+    street: "",
+    city: "",
+    state: "",
+    zip: "",
+  };
 }

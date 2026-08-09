@@ -1,5 +1,16 @@
+import { DEMO_COMPANY_DEFAULTS } from "@/lib/company/demo-defaults";
+import { withRecalculatedTotals } from "@/lib/quotes/calculations";
 import { addDays, startOfDay, toIsoDate } from "@/lib/format";
-import type { Quote, QuoteCustomerSnapshot, QuoteStatus } from "@/types/quote";
+import type { Customer } from "@/types/customer";
+import { customerDisplayName } from "@/types/customer";
+import type {
+  DiscountType,
+  LineCategory,
+  Quote,
+  QuoteCustomerSnapshot,
+  QuoteLineItem,
+  QuoteStatus,
+} from "@/types/quote";
 
 function daysFrom(today: Date, offset: number): string {
   return toIsoDate(addDays(startOfDay(today), offset));
@@ -29,6 +40,41 @@ function snapshot(
   };
 }
 
+export function customerToSnapshot(customer: Customer): QuoteCustomerSnapshot {
+  return {
+    customerId: customer.id,
+    customerName: customerDisplayName(customer),
+    companyName: customer.companyName,
+    phone: customer.phone,
+    email: customer.email,
+    street: customer.street,
+    city: customer.city,
+    state: customer.state,
+    zip: customer.zip,
+  };
+}
+
+let lineSeq = 0;
+function line(
+  category: LineCategory,
+  description: string,
+  quantity: number,
+  unitPrice: number,
+  unit = "ea",
+  internalNotes = "",
+): Omit<QuoteLineItem, "lineTotal" | "sortOrder"> {
+  lineSeq += 1;
+  return {
+    id: `LINE-${String(lineSeq).padStart(4, "0")}`,
+    category,
+    description,
+    quantity,
+    unitPrice,
+    unit,
+    internalNotes,
+  };
+}
+
 type SeedInput = {
   id: string;
   customer: QuoteCustomerSnapshot;
@@ -37,7 +83,6 @@ type SeedInput = {
   quoteDateOffset: number;
   validUntilOffset: number | null;
   preparedBy: string;
-  grandTotal: number;
   createdOffset: number;
   updatedOffset: number;
   sentOffset?: number | null;
@@ -47,6 +92,13 @@ type SeedInput = {
   archived?: boolean;
   archivedOffset?: number | null;
   statusBeforeArchive?: QuoteStatus | null;
+  taxRate?: number;
+  discountType?: DiscountType;
+  discountValue?: number;
+  internalNotes?: string;
+  customerFacingMessage?: string;
+  termsAndConditions?: string;
+  lines: Omit<QuoteLineItem, "lineTotal" | "sortOrder">[];
 };
 
 /**
@@ -54,6 +106,7 @@ type SeedInput = {
  * One Accepted quote is also archived to exercise restore.
  */
 export function getDemoQuotes(today: Date = new Date()): Quote[] {
+  lineSeq = 0;
   const jane = snapshot(
     "CUST-000001",
     "Jane Doe",
@@ -154,6 +207,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "75063",
   );
 
+  const defaults = DEMO_COMPANY_DEFAULTS;
+
   const seeds: SeedInput[] = [
     {
       id: "QUO-1042",
@@ -163,9 +218,14 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -18,
       validUntilOffset: 12,
       preparedBy: "Alex Rivera",
-      grandTotal: 4820,
       createdOffset: -18,
       updatedOffset: -18,
+      taxRate: 8.25,
+      lines: [
+        line("Services", "Attic insulation assessment", 1, 129, "ea"),
+        line("Materials", "Blown-in insulation", 40, 48, "bag"),
+        line("Labor", "Duct sealing labor", 6, 110, "hr"),
+      ],
     },
     {
       id: "QUO-1048",
@@ -175,9 +235,13 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -11,
       validUntilOffset: 19,
       preparedBy: "Alex Rivera",
-      grandTotal: 2150,
       createdOffset: -11,
       updatedOffset: -10,
+      lines: [
+        line("Services", "Rooftop unit seasonal maintenance", 1, 450, "ea"),
+        line("Materials", "Filter Replacement Pack", 4, 48, "ea"),
+        line("Labor", "Service Labor", 3, 115, "hr"),
+      ],
     },
     {
       id: "QUO-1055",
@@ -187,9 +251,12 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -3,
       validUntilOffset: 27,
       preparedBy: "Jordan Lee",
-      grandTotal: 960,
       createdOffset: -3,
       updatedOffset: -3,
+      lines: [
+        line("Services", "Smart thermostat install and configuration", 1, 285, "ea"),
+        line("Labor", "Calibration and walkthrough", 1, 115, "hr"),
+      ],
     },
     {
       id: "QUO-1056",
@@ -199,9 +266,16 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -1,
       validUntilOffset: 29,
       preparedBy: "Jordan Lee",
-      grandTotal: 3340,
       createdOffset: -1,
       updatedOffset: -1,
+      discountType: "percent",
+      discountValue: 5,
+      taxRate: 8.25,
+      lines: [
+        line("Materials", "Standard outdoor condenser unit", 1, 2450, "ea"),
+        line("Materials", "Matched evaporator coil", 1, 875, "ea"),
+        line("Labor", "Installation labor", 8, 125, "hr"),
+      ],
     },
     {
       id: "QUO-1031",
@@ -211,10 +285,15 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -14,
       validUntilOffset: 5,
       preparedBy: "Alex Rivera",
-      grandTotal: 1875,
       createdOffset: -14,
       updatedOffset: -12,
       sentOffset: -12,
+      taxRate: 8.25,
+      lines: [
+        line("Services", "Compressor diagnostic", 1, 129, "ea"),
+        line("Materials", "Compressor service kit", 1, 620, "ea"),
+        line("Labor", "Service Labor", 4, 115, "hr"),
+      ],
     },
     {
       id: "QUO-1049",
@@ -224,10 +303,17 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -9,
       validUntilOffset: 3,
       preparedBy: "Morgan Blake",
-      grandTotal: 6420,
       createdOffset: -9,
       updatedOffset: -8,
       sentOffset: -8,
+      taxRate: 8.25,
+      discountType: "fixed",
+      discountValue: 250,
+      lines: [
+        line("Services", "Multi-zone seasonal startup", 1, 2200, "ea"),
+        line("Materials", "Filter Replacement Pack", 24, 48, "ea"),
+        line("Labor", "Service Labor", 16, 115, "hr"),
+      ],
     },
     {
       id: "QUO-1052",
@@ -237,10 +323,15 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -5,
       validUntilOffset: 16,
       preparedBy: "Alex Rivera",
-      grandTotal: 2780,
       createdOffset: -5,
       updatedOffset: -4,
       sentOffset: -4,
+      taxRate: 8.25,
+      lines: [
+        line("Materials", "Make-up air unit", 1, 1850, "ea"),
+        line("Labor", "Installation labor", 6, 125, "hr"),
+        line("Services", "Startup and balancing", 1, 280, "ea"),
+      ],
     },
     {
       id: "QUO-1022",
@@ -250,11 +341,17 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -28,
       validUntilOffset: -5,
       preparedBy: "Jordan Lee",
-      grandTotal: 9120,
       createdOffset: -28,
       updatedOffset: -20,
       sentOffset: -26,
       acceptedOffset: -20,
+      taxRate: 8.25,
+      lines: [
+        line("Materials", "VRF indoor cassette", 3, 1680, "ea"),
+        line("Materials", "Refrigerant line set", 3, 240, "ea"),
+        line("Labor", "Installation labor", 24, 125, "hr"),
+        line("Services", "Commissioning", 1, 650, "ea"),
+      ],
     },
     {
       id: "QUO-1038",
@@ -264,11 +361,16 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -16,
       validUntilOffset: 2,
       preparedBy: "Morgan Blake",
-      grandTotal: 4560,
       createdOffset: -16,
       updatedOffset: -10,
       sentOffset: -15,
       acceptedOffset: -10,
+      taxRate: 8.25,
+      lines: [
+        line("Materials", "Heat pump outdoor unit", 1, 3200, "ea"),
+        line("Materials", "Matched air handler", 1, 1450, "ea"),
+        line("Labor", "Installation labor", 14, 125, "hr"),
+      ],
     },
     {
       id: "QUO-1044",
@@ -278,11 +380,17 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -8,
       validUntilOffset: 14,
       preparedBy: "Alex Rivera",
-      grandTotal: 12850,
       createdOffset: -8,
       updatedOffset: -3,
       sentOffset: -7,
       acceptedOffset: -3,
+      taxRate: 8.25,
+      lines: [
+        line("Materials", "Dedicated cooling unit", 1, 8900, "ea"),
+        line("Materials", "Condensate pump kit", 1, 320, "ea"),
+        line("Labor", "Installation labor", 20, 125, "hr"),
+        line("Services", "Load calculation and design", 1, 750, "ea"),
+      ],
     },
     {
       id: "QUO-1051",
@@ -292,7 +400,6 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -40,
       validUntilOffset: -10,
       preparedBy: "Jordan Lee",
-      grandTotal: 780,
       createdOffset: -40,
       updatedOffset: -35,
       sentOffset: -38,
@@ -300,6 +407,11 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       archived: true,
       archivedOffset: -5,
       statusBeforeArchive: "Accepted",
+      lines: [
+        line("Services", "Seasonal furnace inspection and tune-up", 1, 189, "ea"),
+        line("Materials", "Filter Replacement Pack", 2, 48, "ea"),
+        line("Labor", "Service Labor", 2, 115, "hr"),
+      ],
     },
     {
       id: "QUO-1028",
@@ -309,11 +421,16 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -22,
       validUntilOffset: -1,
       preparedBy: "Morgan Blake",
-      grandTotal: 5400,
       createdOffset: -22,
       updatedOffset: -18,
       sentOffset: -21,
       rejectedOffset: -18,
+      taxRate: 8.25,
+      lines: [
+        line("Materials", "Single-zone mini-split", 1, 2800, "ea"),
+        line("Labor", "Installation labor", 10, 125, "hr"),
+        line("Services", "Electrical disconnect and startup", 1, 350, "ea"),
+      ],
     },
     {
       id: "QUO-1040",
@@ -323,11 +440,16 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -12,
       validUntilOffset: 8,
       preparedBy: "Alex Rivera",
-      grandTotal: 2890,
       createdOffset: -12,
       updatedOffset: -9,
       sentOffset: -11,
       rejectedOffset: -9,
+      taxRate: 8.25,
+      lines: [
+        line("Services", "Hood airflow balancing", 1, 980, "ea"),
+        line("Labor", "Service Labor", 8, 115, "hr"),
+        line("Materials", "Belt and damper kit", 1, 210, "ea"),
+      ],
     },
     {
       id: "QUO-1015",
@@ -337,11 +459,16 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -45,
       validUntilOffset: -10,
       preparedBy: "Jordan Lee",
-      grandTotal: 3675,
       createdOffset: -45,
       updatedOffset: -40,
       sentOffset: -40,
       expiredOffset: -10,
+      taxRate: 8.25,
+      lines: [
+        line("Materials", "Matched evaporator coil", 1, 875, "ea"),
+        line("Labor", "Installation labor", 6, 125, "hr"),
+        line("Services", "System recharge and check", 1, 320, "ea"),
+      ],
     },
     {
       id: "QUO-1033",
@@ -351,51 +478,75 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       quoteDateOffset: -35,
       validUntilOffset: -4,
       preparedBy: "Morgan Blake",
-      grandTotal: 1980,
       createdOffset: -35,
       updatedOffset: -33,
       sentOffset: -33,
       expiredOffset: -4,
+      taxRate: 8.25,
+      lines: [
+        line("Materials", "Industrial air curtain", 1, 1120, "ea"),
+        line("Labor", "Installation labor", 4, 125, "hr"),
+        line("Services", "Electrical hookup and test", 1, 240, "ea"),
+      ],
     },
   ];
 
-  return seeds.map((seed) => ({
-    id: seed.id,
-    customerSnapshot: seed.customer,
-    jobDescription: seed.jobDescription,
-    status: seed.status,
-    quoteDate: daysFrom(today, seed.quoteDateOffset),
-    validUntil:
-      seed.validUntilOffset === null
-        ? null
-        : daysFrom(today, seed.validUntilOffset),
-    preparedBy: seed.preparedBy,
-    grandTotal: seed.grandTotal,
-    createdAt: daysFrom(today, seed.createdOffset),
-    updatedAt: daysFrom(today, seed.updatedOffset),
-    sentAt:
-      seed.sentOffset === undefined || seed.sentOffset === null
-        ? null
-        : daysFrom(today, seed.sentOffset),
-    acceptedAt:
-      seed.acceptedOffset === undefined || seed.acceptedOffset === null
-        ? null
-        : daysFrom(today, seed.acceptedOffset),
-    rejectedAt:
-      seed.rejectedOffset === undefined || seed.rejectedOffset === null
-        ? null
-        : daysFrom(today, seed.rejectedOffset),
-    expiredAt:
-      seed.expiredOffset === undefined || seed.expiredOffset === null
-        ? null
-        : daysFrom(today, seed.expiredOffset),
-    archivedAt:
-      seed.archived && seed.archivedOffset != null
-        ? daysFrom(today, seed.archivedOffset)
-        : null,
-    archived: Boolean(seed.archived),
-    statusBeforeArchive: seed.statusBeforeArchive ?? null,
-  }));
+  return seeds.map((seed) => {
+    const base = {
+      id: seed.id,
+      customerSnapshot: seed.customer,
+      jobDescription: seed.jobDescription,
+      status: seed.status,
+      quoteDate: daysFrom(today, seed.quoteDateOffset),
+      validUntil:
+        seed.validUntilOffset === null
+          ? null
+          : daysFrom(today, seed.validUntilOffset),
+      preparedBy: seed.preparedBy,
+      internalNotes: seed.internalNotes ?? "",
+      customerFacingMessage:
+        seed.customerFacingMessage ?? defaults.customerFacingMessage,
+      termsAndConditions:
+        seed.termsAndConditions ?? defaults.termsAndConditions,
+      taxRate: seed.taxRate ?? defaults.taxRate,
+      discountType: seed.discountType ?? defaults.discountType,
+      discountValue: seed.discountValue ?? defaults.discountValue,
+      lineItems: seed.lines.map((item, index) => ({
+        ...item,
+        sortOrder: index,
+        lineTotal: 0,
+      })),
+      subtotal: 0,
+      discountAmount: 0,
+      taxAmount: 0,
+      grandTotal: 0,
+      createdAt: daysFrom(today, seed.createdOffset),
+      updatedAt: daysFrom(today, seed.updatedOffset),
+      sentAt:
+        seed.sentOffset === undefined || seed.sentOffset === null
+          ? null
+          : daysFrom(today, seed.sentOffset),
+      acceptedAt:
+        seed.acceptedOffset === undefined || seed.acceptedOffset === null
+          ? null
+          : daysFrom(today, seed.acceptedOffset),
+      rejectedAt:
+        seed.rejectedOffset === undefined || seed.rejectedOffset === null
+          ? null
+          : daysFrom(today, seed.rejectedOffset),
+      expiredAt:
+        seed.expiredOffset === undefined || seed.expiredOffset === null
+          ? null
+          : daysFrom(today, seed.expiredOffset),
+      archivedAt:
+        seed.archived && seed.archivedOffset != null
+          ? daysFrom(today, seed.archivedOffset)
+          : null,
+      archived: Boolean(seed.archived),
+      statusBeforeArchive: seed.statusBeforeArchive ?? null,
+    };
+    return withRecalculatedTotals(base);
+  });
 }
 
 export function nextQuoteId(quotes: Quote[]): string {
@@ -409,7 +560,16 @@ export function nextQuoteId(quotes: Quote[]): string {
   return `QUO-${String(next).padStart(width, "0")}`;
 }
 
-/** Known demo customer snapshots for Create Quote stubs. */
+export function nextLineId(lines: QuoteLineItem[]): string {
+  const max = lines.reduce((highest, item) => {
+    const match = /^LINE-(\d+)$/.exec(item.id);
+    if (!match) return highest;
+    return Math.max(highest, Number(match[1]));
+  }, 0);
+  return `LINE-${String(max + 1).padStart(4, "0")}`;
+}
+
+/** Known demo customer snapshots (fallback when customer store not yet hydrated). */
 export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
   snapshot(
     "CUST-000001",
@@ -509,6 +669,17 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "Irving",
     "TX",
     "75063",
+  ),
+  snapshot(
+    "CUST-000010",
+    "Noah Harris",
+    "",
+    "(469) 555-0150",
+    "noah.harris@email.com",
+    "88 Cedar Hill Drive",
+    "Plano",
+    "TX",
+    "75023",
   ),
 ];
 

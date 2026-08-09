@@ -67,7 +67,7 @@ export function CustomerSummary({
           ) : (
             <>
               <Link
-                href={`/quotes?create=1&customer=${customer.id}`}
+                href={`/quotes/new?customer=${customer.id}`}
                 className={buttonClassName({ variant: "primary", size: "sm" })}
               >
                 New Quote

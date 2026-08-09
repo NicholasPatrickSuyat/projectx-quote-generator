@@ -51,8 +51,8 @@ export function quoteMatchesSearch(quote: Quote, search: string): boolean {
   if (!q) return true;
   const haystack = [
     quote.id,
-    quote.customerSnapshot.customerName,
-    quote.customerSnapshot.companyName,
+    quote.customerSnapshot?.customerName ?? "",
+    quote.customerSnapshot?.companyName ?? "",
     quote.jobDescription,
     quote.preparedBy,
     quote.status,
@@ -107,7 +107,8 @@ export function filterQuotes(
 
   if (filters.customerName !== "all") {
     result = result.filter(
-      (quote) => quote.customerSnapshot.customerName === filters.customerName,
+      (quote) =>
+        quote.customerSnapshot?.customerName === filters.customerName,
     );
   }
 
@@ -139,8 +140,8 @@ export function sortQuotes(
         cmp = a.id.localeCompare(b.id);
         break;
       case "customer":
-        cmp = a.customerSnapshot.customerName.localeCompare(
-          b.customerSnapshot.customerName,
+        cmp = (a.customerSnapshot?.customerName ?? "").localeCompare(
+          b.customerSnapshot?.customerName ?? "",
         );
         break;
       case "job":
@@ -172,7 +173,9 @@ export function sortQuotes(
 
 export function distinctCustomerNames(quotes: Quote[]): string[] {
   const names = new Set(
-    quotes.map((quote) => quote.customerSnapshot.customerName),
+    quotes
+      .map((quote) => quote.customerSnapshot?.customerName)
+      .filter((name): name is string => Boolean(name)),
   );
   return [...names].sort((a, b) => a.localeCompare(b));
 }

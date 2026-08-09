@@ -22,16 +22,11 @@ import {
 import { SearchInput } from "@/components/ui/search-input";
 import { SlideOver } from "@/components/ui/slide-over";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useQuoteSession } from "@/components/session/quote-session-provider";
 import { DATE_PRESETS, type DatePresetId } from "@/lib/dashboard/date-presets";
 import { cn } from "@/lib/cn";
-import {
-  findCustomerSnapshot,
-  getDemoQuotes,
-} from "@/lib/quotes/demo-data";
-import {
-  parseQuotesSearchParams,
-  quotesUrlWithoutCreate,
-} from "@/lib/quotes/deep-links";
+import { findCustomerSnapshot } from "@/lib/quotes/demo-data";
+import { parseQuotesSearchParams } from "@/lib/quotes/deep-links";
 import {
   clearQuoteFilterChip,
   DEFAULT_QUOTE_FILTERS,
@@ -42,16 +37,10 @@ import {
   type QuoteFilters,
   type QuoteSortKey,
 } from "@/lib/quotes/filters";
-import {
-  archiveQuote,
-  createDraftQuoteStub,
-  duplicateQuote,
-  restoreQuote,
-} from "@/lib/quotes/mutations";
-import { formatCurrency, formatShortDate, startOfDay } from "@/lib/format";
+import { formatCurrency, formatShortDate } from "@/lib/format";
 import { quoteStatusTone, QUOTE_STATUSES, type Quote } from "@/types/quote";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type PanelMode = "closed" | "summary";
 
@@ -61,7 +50,6 @@ type ConfirmState =
   | { type: "bulk-archive" }
   | { type: "bulk-restore" }
   | { type: "pdf" }
-  | { type: "edit-soon" }
   | null;
 
 const SORT_COLUMN_MAP: Record<string, QuoteSortKey> = {
@@ -75,32 +63,6 @@ const SORT_COLUMN_MAP: Record<string, QuoteSortKey> = {
   preparedBy: "preparedBy",
 };
 
-let clientTodayMs: number | null = null;
-
-function subscribeToNothing() {
-  return () => {};
-}
-
-function getClientTodayMs(): number | null {
-  if (clientTodayMs === null) {
-    clientTodayMs = startOfDay(new Date()).getTime();
-  }
-  return clientTodayMs;
-}
-
-function getServerTodayMs(): number | null {
-  return null;
-}
-
-function useClientToday(): Date | null {
-  const ms = useSyncExternalStore(
-    subscribeToNothing,
-    getClientTodayMs,
-    getServerTodayMs,
-  );
-  return ms === null ? null : new Date(ms);
-}
-
 function resolveCustomerFilterName(
   quotes: Quote[],
   customerId: string | null,
@@ -109,20 +71,27 @@ function resolveCustomerFilterName(
   if (existingName !== "all") return existingName;
   if (!customerId) return "all";
   const fromQuotes = quotes.find(
-    (quote) => quote.customerSnapshot.customerId === customerId,
+    (quote) => quote.customerSnapshot?.customerId === customerId,
   );
-  if (fromQuotes) return fromQuotes.customerSnapshot.customerName;
+  if (fromQuotes?.customerSnapshot) {
+    return fromQuotes.customerSnapshot.customerName;
+  }
   const fromDemo = findCustomerSnapshot(customerId);
   return fromDemo?.customerName ?? "all";
 }
 
 export function QuotesView() {
-  const today = useClientToday();
+  const {
+    ready,
+    today,
+    quotes,
+    archive,
+    restore,
+    duplicate,
+  } = useQuoteSession();
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [seeded, setSeeded] = useState(false);
   const [filters, setFilters] = useState<QuoteFilters>(DEFAULT_QUOTE_FILTERS);
   const [sortKey, setSortKey] = useState<QuoteSortKey>("quoteDate");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -131,44 +100,27 @@ export function QuotesView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [appliedSearchKey, setAppliedSearchKey] = useState<string | null>(null);
-  const [createDeepLinkConsumed, setCreateDeepLinkConsumed] = useState(false);
-  const [shouldStripCreateParam, setShouldStripCreateParam] = useState(false);
 
   const searchKey = searchParams.toString();
+  const seeded = ready;
 
-  if (today && !seeded) {
-    setSeeded(true);
-    setQuotes(getDemoQuotes(today));
-  }
-
-  if (seeded && today && appliedSearchKey !== searchKey) {
+  if (ready && today && appliedSearchKey !== searchKey) {
     setAppliedSearchKey(searchKey);
     const parsed = parseQuotesSearchParams(searchParams);
-    const customerName = resolveCustomerFilterName(
-      quotes,
-      parsed.customerId,
-      parsed.filters.customerName,
-    );
-    setFilters({ ...parsed.filters, customerName });
 
-    if (parsed.filters.attention === "awaiting-response") {
-      setSortKey("sentAt");
-      setSortDir("desc");
-    }
+    if (!parsed.create) {
+      const customerName = resolveCustomerFilterName(
+        quotes,
+        parsed.customerId,
+        parsed.filters.customerName,
+      );
+      setFilters({ ...parsed.filters, customerName });
 
-    if (parsed.create) {
-      if (!createDeepLinkConsumed) {
-        setCreateDeepLinkConsumed(true);
-        const created = createDraftQuoteStub(quotes, today, parsed.customerId);
-        setQuotes([created, ...quotes]);
-        setSelectedId(created.id);
-        setPanelMode("summary");
-        setShouldStripCreateParam(true);
+      if (parsed.filters.attention === "awaiting-response") {
+        setSortKey("sentAt");
+        setSortDir("desc");
       }
-    } else {
-      if (createDeepLinkConsumed) {
-        setCreateDeepLinkConsumed(false);
-      }
+
       const openId = searchParams.get("id");
       if (openId && quotes.some((quote) => quote.id === openId)) {
         setSelectedId(openId);
@@ -177,10 +129,19 @@ export function QuotesView() {
     }
   }
 
+  const createRedirect = useMemo(() => {
+    if (!ready) return null;
+    const parsed = parseQuotesSearchParams(searchParams);
+    if (!parsed.create) return null;
+    return parsed.customerId
+      ? `/quotes/new?customer=${parsed.customerId}`
+      : "/quotes/new";
+  }, [ready, searchParams]);
+
   useEffect(() => {
-    if (!shouldStripCreateParam) return;
-    router.replace(quotesUrlWithoutCreate(searchParams), { scroll: false });
-  }, [shouldStripCreateParam, router, searchParams]);
+    if (!createRedirect) return;
+    router.replace(createRedirect);
+  }, [createRedirect, router]);
 
   const selectedQuote = useMemo(
     () => quotes.find((quote) => quote.id === selectedId) ?? null,
@@ -282,28 +243,22 @@ export function QuotesView() {
   }
 
   function handleCreate() {
-    if (!today) return;
-    const created = createDraftQuoteStub(quotes, today, null);
-    setQuotes((prev) => [created, ...prev]);
-    setSelectedId(created.id);
-    setPanelMode("summary");
+    router.push("/quotes/new");
+  }
+
+  function handleEdit(quote: Quote) {
+    router.push(`/quotes/${quote.id}/edit`);
   }
 
   function handleDuplicate(quote: Quote) {
-    if (!today) return;
-    const copy = duplicateQuote(quote, quotes, today);
-    setQuotes((prev) => [copy, ...prev]);
-    setSelectedId(copy.id);
-    setPanelMode("summary");
+    const copy = duplicate(quote.id);
+    if (copy) {
+      router.push(`/quotes/${copy.id}/edit`);
+    }
   }
 
   function applyArchive(quote: Quote) {
-    if (!today) return;
-    setQuotes((prev) =>
-      prev.map((item) =>
-        item.id === quote.id ? archiveQuote(item, today) : item,
-      ),
-    );
+    archive(quote.id);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.delete(quote.id);
@@ -312,12 +267,7 @@ export function QuotesView() {
   }
 
   function applyRestore(quote: Quote) {
-    if (!today) return;
-    setQuotes((prev) =>
-      prev.map((item) =>
-        item.id === quote.id ? restoreQuote(item, today) : item,
-      ),
-    );
+    restore(quote.id);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.delete(quote.id);
@@ -326,14 +276,12 @@ export function QuotesView() {
   }
 
   function applyBulkArchive() {
-    if (!today) return;
-    const ids = new Set(visibleSelectedIds());
-    if (ids.size === 0) return;
-    setQuotes((prev) =>
-      prev.map((item) =>
-        ids.has(item.id) && !item.archived ? archiveQuote(item, today) : item,
-      ),
-    );
+    const ids = visibleSelectedIds();
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      const quote = quotes.find((item) => item.id === id);
+      if (quote && !quote.archived) archive(id);
+    }
     setSelectedIds((prev) => {
       const next = new Set(prev);
       for (const id of ids) next.delete(id);
@@ -342,14 +290,12 @@ export function QuotesView() {
   }
 
   function applyBulkRestore() {
-    if (!today) return;
-    const ids = new Set(visibleSelectedIds());
-    if (ids.size === 0) return;
-    setQuotes((prev) =>
-      prev.map((item) =>
-        ids.has(item.id) && item.archived ? restoreQuote(item, today) : item,
-      ),
-    );
+    const ids = visibleSelectedIds();
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      const quote = quotes.find((item) => item.id === id);
+      if (quote && quote.archived) restore(id);
+    }
     setSelectedIds((prev) => {
       const next = new Set(prev);
       for (const id of ids) next.delete(id);
@@ -373,7 +319,6 @@ export function QuotesView() {
         applyBulkRestore();
         break;
       case "pdf":
-      case "edit-soon":
         break;
     }
     setConfirm(null);
@@ -445,7 +390,7 @@ export function QuotesView() {
       sortable: true,
       cell: (row) => (
         <span className="block max-w-[12rem] truncate">
-          {row.customerSnapshot.customerName}
+          {row.customerSnapshot?.customerName ?? "—"}
         </span>
       ),
     },
@@ -528,7 +473,7 @@ export function QuotesView() {
               {
                 id: "edit",
                 label: "Edit",
-                onSelect: () => setConfirm({ type: "edit-soon" }),
+                onSelect: () => handleEdit(row),
               },
               {
                 id: "duplicate",
@@ -599,14 +544,6 @@ export function QuotesView() {
           title: "Generate PDF",
           description:
             "PDF generation will be available in the PDF milestone.",
-          confirmLabel: "Got it",
-          tone: "primary" as const,
-        };
-      case "edit-soon":
-        return {
-          title: "Edit quote",
-          description:
-            "Full quote editing will be available in the Quote Builder milestone.",
           confirmLabel: "Got it",
           tone: "primary" as const,
         };
@@ -836,7 +773,7 @@ export function QuotesView() {
                       {quote.id}
                     </p>
                     <p className="mt-0.5 truncate text-sm text-text-secondary">
-                      {quote.customerSnapshot.customerName}
+                      {quote.customerSnapshot?.customerName ?? "—"}
                     </p>
                     <p className="mt-1 line-clamp-2 text-sm text-text-secondary">
                       {quote.jobDescription || "No job description"}
@@ -853,7 +790,7 @@ export function QuotesView() {
                       {
                         id: "edit",
                         label: "Edit",
-                        onSelect: () => setConfirm({ type: "edit-soon" }),
+                        onSelect: () => handleEdit(quote),
                       },
                       {
                         id: "duplicate",
@@ -933,7 +870,7 @@ export function QuotesView() {
         title={selectedQuote?.id ?? "Quote"}
         description={
           selectedQuote
-            ? `${selectedQuote.customerSnapshot.customerName} · ${selectedQuote.archived ? "Archived" : selectedQuote.status}`
+            ? `${selectedQuote.customerSnapshot?.customerName ?? "No customer"} · ${selectedQuote.archived ? "Archived" : selectedQuote.status}`
             : undefined
         }
         onClose={closePanel}
@@ -951,7 +888,7 @@ export function QuotesView() {
               setConfirm({ type: "restore", quote: selectedQuote })
             }
             onGeneratePdf={() => setConfirm({ type: "pdf" })}
-            onEdit={() => setConfirm({ type: "edit-soon" })}
+            onEdit={() => handleEdit(selectedQuote)}
           />
         ) : null}
       </SlideOver>
@@ -962,11 +899,7 @@ export function QuotesView() {
           title={confirmCopy.title}
           description={confirmCopy.description}
           confirmLabel={confirmCopy.confirmLabel}
-          cancelLabel={
-            confirm.type === "pdf" || confirm.type === "edit-soon"
-              ? "Close"
-              : "Cancel"
-          }
+          cancelLabel={confirm.type === "pdf" ? "Close" : "Cancel"}
           tone={confirmCopy.tone}
           onConfirm={confirmPrimary}
           onCancel={() => setConfirm(null)}

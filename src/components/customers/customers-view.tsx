@@ -24,9 +24,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   customerToFormValues,
   emptyCustomerForm,
-  getDemoCustomers,
-  nextCustomerId,
 } from "@/lib/customers/demo-data";
+import { useCustomerSession } from "@/components/session/customer-session-provider";
 import {
   DEFAULT_CUSTOMER_FILTERS,
   filterCustomers,
@@ -39,7 +38,7 @@ import {
   type CustomerFilters,
   type CustomerSortOption,
 } from "@/lib/customers/filters";
-import { formatShortDate, startOfDay, toIsoDate } from "@/lib/format";
+import { formatShortDate } from "@/lib/format";
 import {
   customerCityState,
   customerDisplayName,
@@ -49,7 +48,7 @@ import {
 } from "@/types/customer";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type PanelMode = "closed" | "summary" | "create" | "edit";
 
@@ -67,32 +66,6 @@ const SORT_COLUMN_MAP: Record<string, CustomerSortOption> = {
   lastQuote: "lastQuote",
 };
 
-let clientTodayMs: number | null = null;
-
-function subscribeToNothing() {
-  return () => {};
-}
-
-function getClientTodayMs(): number | null {
-  if (clientTodayMs === null) {
-    clientTodayMs = startOfDay(new Date()).getTime();
-  }
-  return clientTodayMs;
-}
-
-function getServerTodayMs(): number | null {
-  return null;
-}
-
-function useClientToday(): Date | null {
-  const ms = useSyncExternalStore(
-    subscribeToNothing,
-    getClientTodayMs,
-    getServerTodayMs,
-  );
-  return ms === null ? null : new Date(ms);
-}
-
 function formsEqual(a: CustomerFormValues, b: CustomerFormValues): boolean {
   return (
     a.firstName === b.firstName &&
@@ -109,12 +82,18 @@ function formsEqual(a: CustomerFormValues, b: CustomerFormValues): boolean {
 }
 
 export function CustomersView() {
-  const today = useClientToday();
+  const {
+    ready,
+    customers,
+    createCustomer,
+    updateCustomer,
+    archiveCustomer,
+    restoreCustomer,
+  } = useCustomerSession();
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [seeded, setSeeded] = useState(false);
+  const seeded = ready;
   const [filters, setFilters] = useState<CustomerFilters>(DEFAULT_CUSTOMER_FILTERS);
   const [panelMode, setPanelMode] = useState<PanelMode>("closed");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -124,11 +103,6 @@ export function CustomersView() {
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [createDeepLinkHandled, setCreateDeepLinkHandled] = useState(false);
   const [shouldClearCreateParam, setShouldClearCreateParam] = useState(false);
-
-  if (today && !seeded) {
-    setSeeded(true);
-    setCustomers(getDemoCustomers(today));
-  }
 
   if (
     seeded &&
@@ -217,31 +191,21 @@ export function CustomersView() {
       return;
     }
 
-    const now = toIsoDate(startOfDay(new Date()));
+    const trimmed: CustomerFormValues = {
+      firstName: formValues.firstName.trim(),
+      lastName: formValues.lastName.trim(),
+      phone: formValues.phone.trim(),
+      email: formValues.email.trim(),
+      companyName: formValues.companyName.trim(),
+      street: formValues.street.trim(),
+      city: formValues.city.trim(),
+      state: formValues.state.trim().toUpperCase(),
+      zip: formValues.zip.trim(),
+      internalNotes: formValues.internalNotes.trim(),
+    };
 
     if (panelMode === "create") {
-      const created: Customer = {
-        id: nextCustomerId(customers),
-        firstName: formValues.firstName.trim(),
-        lastName: formValues.lastName.trim(),
-        phone: formValues.phone.trim(),
-        email: formValues.email.trim(),
-        companyName: formValues.companyName.trim(),
-        street: formValues.street.trim(),
-        city: formValues.city.trim(),
-        state: formValues.state.trim().toUpperCase(),
-        zip: formValues.zip.trim(),
-        internalNotes: formValues.internalNotes.trim(),
-        createdAt: now,
-        updatedAt: now,
-        archived: false,
-        totalQuotes: 0,
-        draftQuotes: 0,
-        acceptedQuotes: 0,
-        lastQuoteDate: null,
-        recentQuotes: [],
-      };
-      setCustomers((prev) => [created, ...prev]);
+      const created = createCustomer(trimmed);
       setSelectedId(created.id);
       setPanelMode("summary");
       setBaselineForm(customerToFormValues(created));
@@ -250,54 +214,24 @@ export function CustomersView() {
     }
 
     if (panelMode === "edit" && selectedId) {
-      setCustomers((prev) =>
-        prev.map((customer) =>
-          customer.id === selectedId
-            ? {
-                ...customer,
-                firstName: formValues.firstName.trim(),
-                lastName: formValues.lastName.trim(),
-                phone: formValues.phone.trim(),
-                email: formValues.email.trim(),
-                companyName: formValues.companyName.trim(),
-                street: formValues.street.trim(),
-                city: formValues.city.trim(),
-                state: formValues.state.trim().toUpperCase(),
-                zip: formValues.zip.trim(),
-                internalNotes: formValues.internalNotes.trim(),
-                updatedAt: now,
-              }
-            : customer,
-        ),
-      );
-      setPanelMode("summary");
-      setBaselineForm(formValues);
+      const updated = updateCustomer(selectedId, trimmed);
+      if (updated) {
+        setPanelMode("summary");
+        setBaselineForm(customerToFormValues(updated));
+        setFormValues(customerToFormValues(updated));
+      }
     }
   }
 
-  function archiveCustomer(customer: Customer) {
-    const now = toIsoDate(startOfDay(new Date()));
-    setCustomers((prev) =>
-      prev.map((item) =>
-        item.id === customer.id
-          ? { ...item, archived: true, updatedAt: now }
-          : item,
-      ),
-    );
+  function handleArchiveCustomer(customer: Customer) {
+    archiveCustomer(customer.id);
     if (selectedId === customer.id) {
       setPanelMode("summary");
     }
   }
 
-  function restoreCustomer(customer: Customer) {
-    const now = toIsoDate(startOfDay(new Date()));
-    setCustomers((prev) =>
-      prev.map((item) =>
-        item.id === customer.id
-          ? { ...item, archived: false, updatedAt: now }
-          : item,
-      ),
-    );
+  function handleRestoreCustomer(customer: Customer) {
+    restoreCustomer(customer.id);
     if (selectedId === customer.id) {
       setPanelMode("summary");
     }
@@ -431,7 +365,7 @@ export function CustomersView() {
                 label: "New Quote",
                 disabled: row.archived,
                 onSelect: () => {
-                  router.push(`/quotes?create=1&customer=${row.id}`);
+                  router.push(`/quotes/new?customer=${row.id}`);
                 },
               },
               row.archived
@@ -716,7 +650,7 @@ export function CustomersView() {
                 View Quotes
               </Link>
               <Link
-                href={`/quotes?create=1&customer=${selectedCustomer.id}`}
+                href={`/quotes/new?customer=${selectedCustomer.id}`}
                 className={buttonClassName({ variant: "primary" })}
               >
                 New Quote
@@ -781,7 +715,7 @@ export function CustomersView() {
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           if (confirm?.type === "archive") {
-            archiveCustomer(confirm.customer);
+            handleArchiveCustomer(confirm.customer);
           }
           setConfirm(null);
         }}
@@ -796,7 +730,7 @@ export function CustomersView() {
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           if (confirm?.type === "restore") {
-            restoreCustomer(confirm.customer);
+            handleRestoreCustomer(confirm.customer);
           }
           setConfirm(null);
         }}

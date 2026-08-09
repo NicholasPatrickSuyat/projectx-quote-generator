@@ -33,9 +33,9 @@ export function QuoteSummary({
   onEdit,
 }: QuoteSummaryProps) {
   const snap = quote.customerSnapshot;
-  const address = [snap.street, snap.city, snap.state, snap.zip]
-    .filter(Boolean)
-    .join(", ");
+  const address = snap
+    ? [snap.street, snap.city, snap.state, snap.zip].filter(Boolean).join(", ")
+    : "";
 
   return (
     <div className="flex h-full flex-col">
@@ -74,19 +74,23 @@ export function QuoteSummary({
 
         <section className="space-y-3 border-t border-border-default pt-5">
           <h3 className="text-sm font-semibold text-text-primary">Customer</h3>
-          <dl className="space-y-3">
-            <DetailRow label="Name" value={snap.customerName} />
-            {snap.companyName ? (
-              <DetailRow label="Company" value={snap.companyName} />
-            ) : null}
-            {snap.customerId ? (
-              <DetailRow label="Customer ID" value={snap.customerId} />
-            ) : null}
-            {snap.phone ? <DetailRow label="Phone" value={snap.phone} /> : null}
-            {snap.email ? <DetailRow label="Email" value={snap.email} /> : null}
-            {address ? <DetailRow label="Address" value={address} /> : null}
-          </dl>
-          {snap.customerId ? (
+          {snap ? (
+            <dl className="space-y-3">
+              <DetailRow label="Name" value={snap.customerName} />
+              {snap.companyName ? (
+                <DetailRow label="Company" value={snap.companyName} />
+              ) : null}
+              {snap.customerId ? (
+                <DetailRow label="Customer ID" value={snap.customerId} />
+              ) : null}
+              {snap.phone ? <DetailRow label="Phone" value={snap.phone} /> : null}
+              {snap.email ? <DetailRow label="Email" value={snap.email} /> : null}
+              {address ? <DetailRow label="Address" value={address} /> : null}
+            </dl>
+          ) : (
+            <p className="text-sm text-text-secondary">No customer attached.</p>
+          )}
+          {snap?.customerId ? (
             <Link
               href={`/customers`}
               className={buttonClassName({ variant: "ghost", size: "sm" })}
@@ -94,6 +98,22 @@ export function QuoteSummary({
               View Customers
             </Link>
           ) : null}
+        </section>
+
+        <section className="space-y-2 border-t border-border-default pt-5">
+          <h3 className="text-sm font-semibold text-text-primary">Totals</h3>
+          <dl className="space-y-2">
+            <DetailRow label="Subtotal" value={formatCurrency(quote.subtotal)} />
+            <DetailRow
+              label="Discount"
+              value={formatCurrency(quote.discountAmount)}
+            />
+            <DetailRow label="Tax" value={formatCurrency(quote.taxAmount)} />
+            <DetailRow
+              label="Line items"
+              value={String(quote.lineItems.length)}
+            />
+          </dl>
         </section>
 
         <section className="space-y-2 border-t border-border-default pt-5">
@@ -131,13 +151,6 @@ export function QuoteSummary({
           </dl>
         </section>
 
-        <div
-          role="status"
-          className="rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3.5 py-3 text-sm text-text-secondary"
-        >
-          Full quote editing will be available in the Quote Builder milestone.
-          Line items and calculations are not editable here yet.
-        </div>
       </div>
 
       <div className="sticky bottom-0 -mx-1 mt-auto flex flex-wrap gap-2 border-t border-border-default bg-bg-surface px-1 pt-4 pb-1">
