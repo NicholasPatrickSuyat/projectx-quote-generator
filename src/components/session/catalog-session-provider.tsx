@@ -1,5 +1,6 @@
 "use client";
 
+import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { getDemoCatalogItems } from "@/lib/catalog/demo-data";
 import {
   archiveCatalogItem,
@@ -18,9 +19,6 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-
-/** Demo capability boundary — later becomes Admin-only. */
-export const canManageCatalog = true;
 
 type CatalogSessionContextValue = {
   ready: boolean;
@@ -64,6 +62,7 @@ function useClientToday(): Date | null {
 }
 
 export function CatalogSessionProvider({ children }: { children: ReactNode }) {
+  const { capabilities } = useDemoAuthSession();
   const today = useClientToday();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [seeded, setSeeded] = useState(false);
@@ -74,11 +73,16 @@ export function CatalogSessionProvider({ children }: { children: ReactNode }) {
   }
 
   const value = useMemo<CatalogSessionContextValue>(() => {
+    const canManage = capabilities.canManageCatalog;
+
     function getItem(id: string) {
       return items.find((item) => item.id === id);
     }
 
     function createItem(values: CatalogFormValues): CatalogItem {
+      if (!canManage) {
+        throw new Error("Catalog management requires Admin access.");
+      }
       let created!: CatalogItem;
       setItems((prev) => {
         created = createCatalogItem(prev, values);
@@ -91,6 +95,7 @@ export function CatalogSessionProvider({ children }: { children: ReactNode }) {
       id: string,
       values: CatalogFormValues,
     ): CatalogItem | null {
+      if (!canManage) return null;
       let updated: CatalogItem | null = null;
       setItems((prev) =>
         prev.map((item) => {
@@ -103,6 +108,7 @@ export function CatalogSessionProvider({ children }: { children: ReactNode }) {
     }
 
     function duplicateItem(id: string): CatalogItem | null {
+      if (!canManage) return null;
       let copy: CatalogItem | null = null;
       setItems((prev) => {
         const source = prev.find((item) => item.id === id);
@@ -114,6 +120,7 @@ export function CatalogSessionProvider({ children }: { children: ReactNode }) {
     }
 
     function archiveItem(id: string) {
+      if (!canManage) return;
       setItems((prev) =>
         prev.map((item) =>
           item.id === id ? archiveCatalogItem(item) : item,
@@ -122,6 +129,7 @@ export function CatalogSessionProvider({ children }: { children: ReactNode }) {
     }
 
     function restoreItem(id: string) {
+      if (!canManage) return;
       setItems((prev) =>
         prev.map((item) =>
           item.id === id ? restoreCatalogItem(item) : item,
@@ -132,7 +140,7 @@ export function CatalogSessionProvider({ children }: { children: ReactNode }) {
     return {
       ready: seeded,
       items,
-      canManageCatalog,
+      canManageCatalog: canManage,
       getItem,
       createItem,
       updateItem,
@@ -140,7 +148,7 @@ export function CatalogSessionProvider({ children }: { children: ReactNode }) {
       archiveItem,
       restoreItem,
     };
-  }, [items, seeded]);
+  }, [items, seeded, capabilities.canManageCatalog]);
 
   return (
     <CatalogSessionContext.Provider value={value}>

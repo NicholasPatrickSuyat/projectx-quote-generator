@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 type QuoteBulkBarProps = {
   selectedCount: number;
   archiveMode: boolean;
+  canRestore?: boolean;
   onArchive: () => void;
   onRestore: () => void;
   onClear: () => void;
@@ -13,6 +14,7 @@ type QuoteBulkBarProps = {
 export function QuoteBulkBar({
   selectedCount,
   archiveMode,
+  canRestore = false,
   onArchive,
   onRestore,
   onClear,
@@ -30,9 +32,11 @@ export function QuoteBulkBar({
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {archiveMode ? (
-          <Button type="button" variant="secondary" size="sm" onClick={onRestore}>
-            Restore selected
-          </Button>
+          canRestore ? (
+            <Button type="button" variant="secondary" size="sm" onClick={onRestore}>
+              Restore selected
+            </Button>
+          ) : null
         ) : (
           <Button type="button" variant="secondary" size="sm" onClick={onArchive}>
             Archive selected

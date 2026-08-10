@@ -122,6 +122,17 @@ export function IconPlus(props: IconProps) {
   );
 }
 
+export function IconUsers(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="3.5" />
+      <path d="M22 21v-2a3.5 3.5 0 0 0-2.5-3.35" />
+      <path d="M16.5 3.7a3.5 3.5 0 0 1 0 6.6" />
+    </svg>
+  );
+}
+
 export function IconUserPlus(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden {...base} {...props}>
@@ -255,4 +266,5 @@ export const navIcons = {
   quotes: IconQuotes,
   catalog: IconCatalog,
   settings: IconSettings,
+  users: IconUsers,
 } as const;

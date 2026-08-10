@@ -1,4 +1,4 @@
-import { SettingsView } from "@/components/settings/settings-view";
+import { SettingsCapabilityGate } from "@/components/settings/settings-capability-gate";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
@@ -15,7 +15,7 @@ export default function SettingsPage() {
         </div>
       }
     >
-      <SettingsView />
+      <SettingsCapabilityGate />
     </Suspense>
   );
 }

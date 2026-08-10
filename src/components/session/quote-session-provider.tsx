@@ -34,8 +34,11 @@ type QuoteSessionContextValue = {
   getQuote: (id: string) => Quote | undefined;
   upsertQuote: (quote: Quote) => Quote;
   createDraft: (snapshot: QuoteCustomerSnapshot, draft: Quote) => Quote;
-  buildDraft: (snapshot: QuoteCustomerSnapshot) => Quote;
-  duplicate: (id: string) => Quote | null;
+  buildDraft: (
+    snapshot: QuoteCustomerSnapshot,
+    options?: { preparedBy?: string },
+  ) => Quote;
+  duplicate: (id: string, options?: { preparedBy?: string }) => Quote | null;
   archive: (id: string) => void;
   restore: (id: string) => void;
   markSent: (id: string) => void;
@@ -112,11 +115,22 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       return saved;
     }
 
-    function buildDraft(snapshot: QuoteCustomerSnapshot): Quote {
+    function buildDraft(
+      snapshot: QuoteCustomerSnapshot,
+      options?: { preparedBy?: string },
+    ): Quote {
       if (!today) {
         throw new Error("Quote session is not ready");
       }
-      return buildNewDraftQuote(quotes, today, snapshot, getQuoteDefaults());
+      return buildNewDraftQuote(
+        quotes,
+        today,
+        snapshot,
+        getQuoteDefaults(),
+        options?.preparedBy !== undefined
+          ? { preparedBy: options.preparedBy }
+          : undefined,
+      );
     }
 
     function createDraft(snapshot: QuoteCustomerSnapshot, draft: Quote): Quote {
@@ -142,13 +156,19 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       );
     }
 
-    function duplicate(id: string): Quote | null {
+    function duplicate(
+      id: string,
+      options?: { preparedBy?: string },
+    ): Quote | null {
       if (!today) return null;
       let copy: Quote | null = null;
       setQuotes((prev) => {
         const source = prev.find((quote) => quote.id === id);
         if (!source) return prev;
         copy = duplicateQuote(source, prev, today, getQuoteDefaults());
+        if (options?.preparedBy !== undefined) {
+          copy = { ...copy, preparedBy: options.preparedBy };
+        }
         return [copy, ...prev];
       });
       return copy;

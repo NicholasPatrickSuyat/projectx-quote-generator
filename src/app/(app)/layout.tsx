@@ -1,3 +1,4 @@
+import { RequireAuth } from "@/components/auth/require-auth";
 import { AppShell } from "@/components/layout/app-shell";
 import { SessionProviders } from "@/components/session/session-providers";
 
@@ -7,8 +8,10 @@ export default function AppLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <SessionProviders>
-      <AppShell>{children}</AppShell>
-    </SessionProviders>
+    <RequireAuth>
+      <SessionProviders>
+        <AppShell>{children}</AppShell>
+      </SessionProviders>
+    </RequireAuth>
   );
 }

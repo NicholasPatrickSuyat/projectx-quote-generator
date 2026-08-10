@@ -22,12 +22,15 @@ import { Select } from "@/components/ui/input";
 import {
   RowActionsMenu,
   RowActionsMenuSlot,
+  type RowActionItem,
 } from "@/components/ui/row-actions-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { SlideOver } from "@/components/ui/slide-over";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
+import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { useQuoteSession } from "@/components/session/quote-session-provider";
+import { preparedByFromSessionUser } from "@/lib/quotes/prepared-by";
 import { DATE_PRESETS, type DatePresetId } from "@/lib/dashboard/date-presets";
 import { cn } from "@/lib/cn";
 import { findCustomerSnapshot } from "@/lib/quotes/demo-data";
@@ -95,6 +98,7 @@ export function QuotesView() {
     duplicate,
   } = useQuoteSession();
   const { settings } = useCompanySettingsSession();
+  const { currentUser, capabilities } = useDemoAuthSession();
   const {
     pdfState,
     pdfBusy,
@@ -263,7 +267,11 @@ export function QuotesView() {
   }
 
   function handleDuplicate(quote: Quote) {
-    const copy = duplicate(quote.id);
+    const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
+    const copy = duplicate(
+      quote.id,
+      preparedBy !== undefined ? { preparedBy } : undefined,
+    );
     if (copy) {
       router.push(`/quotes/${copy.id}/edit`);
     }
@@ -378,6 +386,48 @@ export function QuotesView() {
     !hasRestrictiveFilters &&
     quotes.length === 0;
 
+  function quoteRowActions(quote: Quote): RowActionItem[] {
+    const items: RowActionItem[] = [
+      {
+        id: "open",
+        label: "Open",
+        onSelect: () => openSummary(quote),
+      },
+      {
+        id: "edit",
+        label: "Edit",
+        onSelect: () => handleEdit(quote),
+      },
+      {
+        id: "duplicate",
+        label: "Duplicate",
+        onSelect: () => handleDuplicate(quote),
+      },
+      {
+        id: "pdf",
+        label: pdfActionLabel(quote),
+        onSelect: () => handleGeneratePdf(quote),
+      },
+    ];
+    if (quote.archived) {
+      if (capabilities.canRestore) {
+        items.push({
+          id: "restore",
+          label: "Restore",
+          onSelect: () => setConfirm({ type: "restore", quote }),
+        });
+      }
+    } else {
+      items.push({
+        id: "archive",
+        label: "Archive",
+        tone: "danger",
+        onSelect: () => setConfirm({ type: "archive", quote }),
+      });
+    }
+    return items;
+  }
+
   const columns: DataTableColumn<Quote>[] = [
     {
       id: "select",
@@ -485,42 +535,7 @@ export function QuotesView() {
         <RowActionsMenuSlot>
           <RowActionsMenu
             label={`Actions for ${row.id}`}
-            items={[
-              {
-                id: "open",
-                label: "Open",
-                onSelect: () => openSummary(row),
-              },
-              {
-                id: "edit",
-                label: "Edit",
-                onSelect: () => handleEdit(row),
-              },
-              {
-                id: "duplicate",
-                label: "Duplicate",
-                onSelect: () => handleDuplicate(row),
-              },
-              {
-                id: "pdf",
-                label: pdfActionLabel(row),
-                onSelect: () => handleGeneratePdf(row),
-              },
-              row.archived
-                ? {
-                    id: "restore",
-                    label: "Restore",
-                    onSelect: () =>
-                      setConfirm({ type: "restore", quote: row }),
-                  }
-                : {
-                    id: "archive",
-                    label: "Archive",
-                    tone: "danger",
-                    onSelect: () =>
-                      setConfirm({ type: "archive", quote: row }),
-                  },
-            ]}
+            items={quoteRowActions(row)}
           />
         </RowActionsMenuSlot>
       ),
@@ -794,42 +809,7 @@ export function QuotesView() {
                   </button>
                   <RowActionsMenu
                     label={`Actions for ${quote.id}`}
-                    items={[
-                      {
-                        id: "open",
-                        label: "Open",
-                        onSelect: () => openSummary(quote),
-                      },
-                      {
-                        id: "edit",
-                        label: "Edit",
-                        onSelect: () => handleEdit(quote),
-                      },
-                      {
-                        id: "duplicate",
-                        label: "Duplicate",
-                        onSelect: () => handleDuplicate(quote),
-                      },
-                      {
-                        id: "pdf",
-                        label: pdfActionLabel(quote),
-                        onSelect: () => handleGeneratePdf(quote),
-                      },
-                      quote.archived
-                        ? {
-                            id: "restore",
-                            label: "Restore",
-                            onSelect: () =>
-                              setConfirm({ type: "restore", quote }),
-                          }
-                        : {
-                            id: "archive",
-                            label: "Archive",
-                            tone: "danger",
-                            onSelect: () =>
-                              setConfirm({ type: "archive", quote }),
-                          },
-                    ]}
+                    items={quoteRowActions(quote)}
                   />
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -873,6 +853,7 @@ export function QuotesView() {
       <QuoteBulkBar
         selectedCount={selectedVisibleCount}
         archiveMode={filters.archive === "archived"}
+        canRestore={capabilities.canRestore}
         onArchive={() => setConfirm({ type: "bulk-archive" })}
         onRestore={() => setConfirm({ type: "bulk-restore" })}
         onClear={clearSelection}
@@ -900,6 +881,7 @@ export function QuotesView() {
             onRestore={() =>
               setConfirm({ type: "restore", quote: selectedQuote })
             }
+            canRestore={capabilities.canRestore}
             onGeneratePdf={() => handleGeneratePdf(selectedQuote)}
             generatePdfLabel={pdfActionLabel(selectedQuote)}
             generatePdfBusy={pdfBusy}

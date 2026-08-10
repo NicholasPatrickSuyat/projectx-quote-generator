@@ -17,6 +17,7 @@ import { Select } from "@/components/ui/input";
 import {
   RowActionsMenu,
   RowActionsMenuSlot,
+  type RowActionItem,
 } from "@/components/ui/row-actions-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { SlideOver } from "@/components/ui/slide-over";
@@ -26,6 +27,8 @@ import {
   emptyCustomerForm,
 } from "@/lib/customers/demo-data";
 import { useCustomerSession } from "@/components/session/customer-session-provider";
+import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
+import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
 import {
   DEFAULT_CUSTOMER_FILTERS,
   filterCustomers,
@@ -90,6 +93,7 @@ export function CustomersView() {
     archiveCustomer,
     restoreCustomer,
   } = useCustomerSession();
+  const { capabilities } = useDemoAuthSession();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -141,6 +145,9 @@ export function CustomersView() {
 
   const dirty = !formsEqual(formValues, baselineForm);
   const formId = "customer-form";
+  useRegisterUnsavedChanges(
+    (panelMode === "create" || panelMode === "edit") && dirty,
+  );
 
   function openCreate() {
     const blank = emptyCustomerForm();
@@ -258,6 +265,46 @@ export function CustomersView() {
     }));
   }
 
+  function customerRowActions(customer: Customer): RowActionItem[] {
+    const items: RowActionItem[] = [
+      {
+        id: "open",
+        label: "Open",
+        onSelect: () => openSummary(customer),
+      },
+      {
+        id: "edit",
+        label: "Edit",
+        onSelect: () => openEdit(customer),
+      },
+      {
+        id: "quote",
+        label: "New Quote",
+        disabled: customer.archived,
+        onSelect: () => {
+          router.push(`/quotes/new?customer=${customer.id}`);
+        },
+      },
+    ];
+    if (customer.archived) {
+      if (capabilities.canRestore) {
+        items.push({
+          id: "restore",
+          label: "Restore",
+          onSelect: () => setConfirm({ type: "restore", customer }),
+        });
+      }
+    } else {
+      items.push({
+        id: "archive",
+        label: "Archive",
+        tone: "danger",
+        onSelect: () => setConfirm({ type: "archive", customer }),
+      });
+    }
+    return items;
+  }
+
   const columns: DataTableColumn<Customer>[] = [
     {
       id: "name",
@@ -349,38 +396,7 @@ export function CustomersView() {
         <RowActionsMenuSlot>
           <RowActionsMenu
             label={`Actions for ${customerDisplayName(row)}`}
-            items={[
-              {
-                id: "open",
-                label: "Open",
-                onSelect: () => openSummary(row),
-              },
-              {
-                id: "edit",
-                label: "Edit",
-                onSelect: () => openEdit(row),
-              },
-              {
-                id: "quote",
-                label: "New Quote",
-                disabled: row.archived,
-                onSelect: () => {
-                  router.push(`/quotes/new?customer=${row.id}`);
-                },
-              },
-              row.archived
-                ? {
-                    id: "restore",
-                    label: "Restore",
-                    onSelect: () => setConfirm({ type: "restore", customer: row }),
-                  }
-                : {
-                    id: "archive",
-                    label: "Archive",
-                    tone: "danger",
-                    onSelect: () => setConfirm({ type: "archive", customer: row }),
-                  },
-            ]}
+            items={customerRowActions(row)}
           />
         </RowActionsMenuSlot>
       ),
@@ -687,6 +703,7 @@ export function CustomersView() {
                   selectedCustomer,
               })
             }
+            canRestore={capabilities.canRestore}
           />
         ) : null}
 

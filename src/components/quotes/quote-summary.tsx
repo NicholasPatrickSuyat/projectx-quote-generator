@@ -11,6 +11,7 @@ type QuoteSummaryProps = {
   onDuplicate: () => void;
   onArchive: () => void;
   onRestore: () => void;
+  canRestore?: boolean;
   onGeneratePdf: () => void;
   generatePdfLabel?: string;
   generatePdfBusy?: boolean;
@@ -31,6 +32,7 @@ export function QuoteSummary({
   onDuplicate,
   onArchive,
   onRestore,
+  canRestore = false,
   onGeneratePdf,
   generatePdfLabel = "Generate PDF",
   generatePdfBusy = false,
@@ -181,13 +183,15 @@ export function QuoteSummary({
           {generatePdfBusy ? "Generating…" : generatePdfLabel}
         </button>
         {quote.archived ? (
-          <button
-            type="button"
-            className={buttonClassName({ variant: "secondary", size: "sm" })}
-            onClick={onRestore}
-          >
-            Restore
-          </button>
+          canRestore ? (
+            <button
+              type="button"
+              className={buttonClassName({ variant: "secondary", size: "sm" })}
+              onClick={onRestore}
+            >
+              Restore
+            </button>
+          ) : null
         ) : (
           <button
             type="button"

@@ -24,7 +24,10 @@ import { SlideOver } from "@/components/ui/slide-over";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
 import { useCustomerSession } from "@/components/session/customer-session-provider";
+import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { useQuoteSession } from "@/components/session/quote-session-provider";
+import { preparedByFromSessionUser } from "@/lib/quotes/prepared-by";
+import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
 import {
   catalogLineDescription,
   type CatalogItem,
@@ -184,6 +187,7 @@ export function QuoteBuilderView({
   const { ready: customersReady, customers, getCustomer, createCustomer } =
     useCustomerSession();
   const { getQuoteDefaults, settings } = useCompanySettingsSession();
+  const { currentUser, capabilities } = useDemoAuthSession();
   const {
     pdfState,
     pdfBusy,
@@ -225,6 +229,8 @@ export function QuoteBuilderView({
     return serializeQuote(draft) !== serializeQuote(baseline);
   }, [draft, baseline]);
 
+  useRegisterUnsavedChanges(dirty);
+
   const saved = mode === "edit" && Boolean(quoteId);
 
   const recalculatedDraft = useMemo(
@@ -258,8 +264,16 @@ export function QuoteBuilderView({
           snapshot = customerToSnapshot(customer);
         }
       }
+      const sessionPreparedBy = preparedByFromSessionUser(
+        currentUser?.fullName,
+      );
       const created = {
-        ...buildDraft(snapshot ?? emptyCustomerSnapshot()),
+        ...buildDraft(
+          snapshot ?? emptyCustomerSnapshot(),
+          sessionPreparedBy !== undefined
+            ? { preparedBy: sessionPreparedBy }
+            : undefined,
+        ),
         customerSnapshot: snapshot,
       };
       setDraft(created);
@@ -656,7 +670,11 @@ export function QuoteBuilderView({
       return;
     }
 
-    const copy = duplicate(recalculatedDraft.id);
+    const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
+    const copy = duplicate(
+      recalculatedDraft.id,
+      preparedBy !== undefined ? { preparedBy } : undefined,
+    );
     if (copy) {
       allowLeaveRef.current = true;
       router.push(`/quotes/${copy.id}/edit`);
@@ -673,7 +691,11 @@ export function QuoteBuilderView({
     if (mode === "create") {
       router.replace(`/quotes/${savedQuote.id}/edit`);
     }
-    const copy = duplicate(savedQuote.id);
+    const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
+    const copy = duplicate(
+      savedQuote.id,
+      preparedBy !== undefined ? { preparedBy } : undefined,
+    );
     if (copy) {
       allowLeaveRef.current = true;
       router.push(`/quotes/${copy.id}/edit`);
@@ -683,7 +705,11 @@ export function QuoteBuilderView({
   function handleDuplicateLastSavedConfirm() {
     if (!recalculatedDraft) return;
     setConfirm(null);
-    const copy = duplicate(recalculatedDraft.id);
+    const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
+    const copy = duplicate(
+      recalculatedDraft.id,
+      preparedBy !== undefined ? { preparedBy } : undefined,
+    );
     if (copy) {
       allowLeaveRef.current = true;
       router.push(`/quotes/${copy.id}/edit`);
@@ -886,7 +912,9 @@ export function QuoteBuilderView({
                   <Input
                     {...fieldControlProps("prepared-by")}
                     value={recalculatedDraft.preparedBy}
-                    disabled={!editable}
+                    disabled={
+                      !editable || !capabilities.canOverridePreparedBy
+                    }
                     onChange={(event) =>
                       updateDraft({ preparedBy: event.target.value })
                     }
@@ -1028,6 +1056,8 @@ export function QuoteBuilderView({
             onArchive={() => requestStatusConfirm("archive")}
             onRestore={() => requestStatusConfirm("restore")}
             onDuplicate={handleDuplicate}
+            canRestore={capabilities.canRestore}
+            canOverrideQuoteStatus={capabilities.canOverrideQuoteStatus}
           />
         </div>
       </PageContainer>

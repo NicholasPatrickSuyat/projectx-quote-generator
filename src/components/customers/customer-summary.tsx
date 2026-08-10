@@ -14,6 +14,7 @@ type CustomerSummaryProps = {
   onEdit: () => void;
   onArchive: () => void;
   onRestore: () => void;
+  canRestore?: boolean;
 };
 
 const quoteTone = {
@@ -29,6 +30,7 @@ export function CustomerSummary({
   onEdit,
   onArchive,
   onRestore,
+  canRestore = false,
 }: CustomerSummaryProps) {
   const status = customerRecordStatus(customer);
   const address = `${customer.street}, ${customerCityState(customer)} ${customer.zip}`;
@@ -57,13 +59,15 @@ export function CustomerSummary({
             Edit
           </button>
           {customer.archived ? (
-            <button
-              type="button"
-              className={buttonClassName({ variant: "primary", size: "sm" })}
-              onClick={onRestore}
-            >
-              Restore
-            </button>
+            canRestore ? (
+              <button
+                type="button"
+                className={buttonClassName({ variant: "primary", size: "sm" })}
+                onClick={onRestore}
+              >
+                Restore
+              </button>
+            ) : null
           ) : (
             <>
               <Link

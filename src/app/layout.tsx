@@ -1,3 +1,4 @@
+import { DemoAuthSessionProvider } from "@/components/session/demo-auth-session-provider";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -24,7 +25,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        <DemoAuthSessionProvider>{children}</DemoAuthSessionProvider>
+      </body>
     </html>
   );
 }

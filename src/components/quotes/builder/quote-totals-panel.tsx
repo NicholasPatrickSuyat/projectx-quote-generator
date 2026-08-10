@@ -18,6 +18,8 @@ type QuoteTotalsPanelProps = {
   discountError?: string;
   taxRateError?: string;
   lastSavedAt: string | null;
+  canRestore?: boolean;
+  canOverrideQuoteStatus?: boolean;
   onDiscountTypeChange: (type: DiscountType) => void;
   onDiscountValueChange: (value: number) => void;
   onTaxRateChange: (rate: number) => void;
@@ -141,6 +143,8 @@ function TotalsBreakdown({
 function StatusActions({
   quote,
   saved,
+  canRestore = false,
+  canOverrideQuoteStatus = false,
   onMarkSent,
   onReturnToDraft,
   onAccepted,
@@ -154,6 +158,8 @@ function StatusActions({
   QuoteTotalsPanelProps,
   | "quote"
   | "saved"
+  | "canRestore"
+  | "canOverrideQuoteStatus"
   | "onMarkSent"
   | "onReturnToDraft"
   | "onAccepted"
@@ -172,9 +178,11 @@ function StatusActions({
   if (archived) {
     return (
       <div className="flex flex-col gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onRestore}>
-          Restore
-        </Button>
+        {canRestore ? (
+          <Button type="button" variant="secondary" size="sm" onClick={onRestore}>
+            Restore
+          </Button>
+        ) : null}
         <Button type="button" variant="secondary" size="sm" onClick={onDuplicate}>
           Duplicate
         </Button>
@@ -185,9 +193,11 @@ function StatusActions({
   if (status === "Expired") {
     return (
       <div className="flex flex-col gap-2">
-        <Button type="button" variant="primary" size="sm" onClick={onReactivate}>
-          Reactivate to Draft
-        </Button>
+        {canOverrideQuoteStatus ? (
+          <Button type="button" variant="primary" size="sm" onClick={onReactivate}>
+            Reactivate to Draft
+          </Button>
+        ) : null}
         <Button type="button" variant="secondary" size="sm" onClick={onArchive}>
           Archive
         </Button>
@@ -231,9 +241,11 @@ function StatusActions({
           <Button type="button" variant="secondary" size="sm" onClick={onRejected}>
             Mark Rejected
           </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={onExpired}>
-            Mark Expired
-          </Button>
+          {canOverrideQuoteStatus ? (
+            <Button type="button" variant="secondary" size="sm" onClick={onExpired}>
+              Mark Expired
+            </Button>
+          ) : null}
         </>
       ) : null}
       <Button type="button" variant="secondary" size="sm" onClick={onArchive}>

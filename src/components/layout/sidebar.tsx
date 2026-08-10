@@ -2,6 +2,7 @@
 
 import { navIcons, IconBuilding } from "@/components/icons";
 import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
+import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { cn } from "@/lib/cn";
 import { isNavActive, MAIN_NAV } from "@/lib/navigation";
 import Link from "next/link";
@@ -15,10 +16,16 @@ type SidebarProps = {
 export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const { ready, settings } = useCompanySettingsSession();
+  const { capabilities } = useDemoAuthSession();
   const companyName = ready
     ? settings.companyName
     : "Project X Mechanical Services";
   const logo = ready ? settings.logo : null;
+
+  const items = MAIN_NAV.filter((item) => {
+    if (!item.requiresCapability) return true;
+    return capabilities[item.requiresCapability];
+  });
 
   return (
     <aside
@@ -43,7 +50,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Main">
-        {MAIN_NAV.map((item) => {
+        {items.map((item) => {
           const active = isNavActive(pathname, item.href);
           const Icon = navIcons[item.icon];
 

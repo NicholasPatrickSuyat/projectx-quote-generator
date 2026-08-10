@@ -1,5 +1,6 @@
 "use client";
 
+import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { getDemoCompanySettings } from "@/lib/company/demo-defaults";
 import type {
   CompanyQuoteDefaults,
@@ -15,9 +16,6 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-
-/** Demo capability boundary — later becomes Admin-only edit. */
-export const canManageSettings = true;
 
 type CompanySettingsSessionContextValue = {
   ready: boolean;
@@ -63,6 +61,7 @@ export function CompanySettingsSessionProvider({
 }: {
   children: ReactNode;
 }) {
+  const { capabilities } = useDemoAuthSession();
   const now = useClientNow();
   const [settings, setSettings] = useState<CompanySettings>(EMPTY_SETTINGS);
   const [seeded, setSeeded] = useState(false);
@@ -78,6 +77,9 @@ export function CompanySettingsSessionProvider({
     }
 
     function saveSettings(values: CompanySettingsFormValues): CompanySettings {
+      if (!capabilities.canManageSettings) {
+        return settings;
+      }
       const saved: CompanySettings = {
         companyName: values.companyName.trim(),
         logo: values.logo
@@ -113,11 +115,11 @@ export function CompanySettingsSessionProvider({
     return {
       ready: seeded,
       settings,
-      canManageSettings,
+      canManageSettings: capabilities.canManageSettings,
       getQuoteDefaults,
       saveSettings,
     };
-  }, [settings, seeded]);
+  }, [settings, seeded, capabilities.canManageSettings]);
 
   return (
     <CompanySettingsSessionContext.Provider value={value}>

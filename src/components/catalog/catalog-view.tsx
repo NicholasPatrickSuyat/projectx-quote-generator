@@ -6,6 +6,7 @@ import { IconPlus, IconSearch } from "@/components/icons";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
 import { useCatalogSession } from "@/components/session/catalog-session-provider";
+import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
 import {
   ActiveArchivedToggle,
   FilterBar,
@@ -138,6 +139,7 @@ export function CatalogView() {
   const dirty = !formsEqual(formValues, baselineForm);
   const formIsOpen = panelMode === "create" || panelMode === "edit";
   const formId = "catalog-form";
+  useRegisterUnsavedChanges(formIsOpen && dirty);
 
   function forceOpenCreate() {
     const blank = emptyCatalogForm();

@@ -4,6 +4,7 @@ import { LogoUploadField } from "@/components/settings/logo-upload-field";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
 import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
+import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField, fieldControlProps } from "@/components/ui/form-field";
@@ -112,6 +113,7 @@ export function SettingsView() {
 
   const dirty = !companySettingsFormsEqual(formValues, baseline);
   const editable = canManageSettings;
+  useRegisterUnsavedChanges(dirty && editable);
 
   useEffect(() => {
     if (!pendingFocusField) return;
@@ -326,7 +328,7 @@ export function SettingsView() {
         </span>
         {!editable ? (
           <span className="text-text-secondary">
-            View only — editing requires Admin access later.
+            Editing requires Admin access.
           </span>
         ) : null}
       </div>
@@ -738,7 +740,7 @@ function DefaultsFields({ values, errors, disabled, onChange }: FieldsProps) {
       <FormField
         id="preparedBy"
         label="Default Prepared By"
-        hint="Optional until authentication links this to the signed-in user."
+        hint="Stored for compatibility. While demo authentication is active, new quotes use the signed-in employee’s name. Admins can override Prepared By on the quote."
       >
         <Input
           {...fieldControlProps("preparedBy")}
