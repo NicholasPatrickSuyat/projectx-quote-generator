@@ -1,6 +1,7 @@
 import { withRecalculatedTotals } from "@/lib/quotes/calculations";
 import { addDays, startOfDay, toIsoDate } from "@/lib/format";
 import { nextLineId, nextQuoteId } from "@/lib/quotes/demo-data";
+import { clearQuotePdfSnapshot } from "@/lib/pdf/snapshot";
 import type { CompanyQuoteDefaults } from "@/types/company";
 import type {
   DiscountType,
@@ -8,6 +9,7 @@ import type {
   Quote,
   QuoteCustomerSnapshot,
   QuoteLineItem,
+  QuotePdfSnapshot,
 } from "@/types/quote";
 
 export function createEmptyLine(
@@ -81,6 +83,7 @@ export function buildNewDraftQuote(
     archivedAt: null,
     archived: false,
     statusBeforeArchive: null,
+    pdfSnapshot: null,
   };
   return withRecalculatedTotals(draft);
 }
@@ -128,6 +131,7 @@ export function duplicateQuote(
     archivedAt: null,
     archived: false,
     statusBeforeArchive: null,
+    pdfSnapshot: null,
   };
   return withRecalculatedTotals(copy);
 }
@@ -155,23 +159,28 @@ export function restoreQuote(quote: Quote, today: Date): Quote {
   };
 }
 
-export function markQuoteSent(quote: Quote, today: Date): Quote {
+export function markQuoteSent(
+  quote: Quote,
+  today: Date,
+  pdfSnapshot: QuotePdfSnapshot,
+): Quote {
   const todayIso = toIsoDate(startOfDay(today));
   return {
     ...quote,
     status: "Sent",
     sentAt: todayIso,
     updatedAt: todayIso,
+    pdfSnapshot,
   };
 }
 
 export function returnQuoteToDraft(quote: Quote, today: Date): Quote {
   const todayIso = toIsoDate(startOfDay(today));
-  return {
+  return clearQuotePdfSnapshot({
     ...quote,
     status: "Draft",
     updatedAt: todayIso,
-  };
+  });
 }
 
 export function markQuoteAccepted(quote: Quote, today: Date): Quote {
@@ -210,7 +219,7 @@ export function reactivateQuoteToDraft(
   defaults: CompanyQuoteDefaults,
 ): Quote {
   const todayIso = toIsoDate(startOfDay(today));
-  return {
+  return clearQuotePdfSnapshot({
     ...quote,
     status: "Draft",
     validUntil: toIsoDate(
@@ -218,7 +227,7 @@ export function reactivateQuoteToDraft(
     ),
     expiredAt: null,
     updatedAt: todayIso,
-  };
+  });
 }
 
 export function quoteIsEditable(quote: Quote): boolean {

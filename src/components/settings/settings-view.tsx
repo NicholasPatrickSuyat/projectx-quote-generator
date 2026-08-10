@@ -416,8 +416,8 @@ export function SettingsView() {
       <p className="mt-4 text-sm text-text-secondary">
         Impact: Future quotes inherit the latest saved defaults. Existing Draft
         quotes keep their stored values. Sent quotes stay unchanged. Draft PDF
-        preview may use current saved branding later; branding freeze on Sent
-        arrives with the PDF milestone.
+        preview uses the latest saved company branding. Final PDFs for Sent
+        quotes use the frozen snapshot captured when the quote was marked Sent.
       </p>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border-default bg-bg-surface/95 backdrop-blur-sm">

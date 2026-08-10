@@ -1,5 +1,6 @@
-import { DEMO_COMPANY_DEFAULTS } from "@/lib/company/demo-defaults";
+import { DEMO_COMPANY_DEFAULTS, getDemoCompanySettings } from "@/lib/company/demo-defaults";
 import { withRecalculatedTotals } from "@/lib/quotes/calculations";
+import { createQuotePdfSnapshot } from "@/lib/pdf/snapshot";
 import { addDays, startOfDay, toIsoDate } from "@/lib/format";
 import type { Customer } from "@/types/customer";
 import { customerDisplayName } from "@/types/customer";
@@ -544,8 +545,18 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
           : null,
       archived: Boolean(seed.archived),
       statusBeforeArchive: seed.statusBeforeArchive ?? null,
+      pdfSnapshot: null,
     };
-    return withRecalculatedTotals(base);
+    const quote = withRecalculatedTotals(base);
+    if (quote.status === "Draft") {
+      return quote;
+    }
+    const settings = getDemoCompanySettings(today);
+    const frozenAt = quote.sentAt ?? quote.updatedAt;
+    return {
+      ...quote,
+      pdfSnapshot: createQuotePdfSnapshot(quote, settings, frozenAt),
+    };
   });
 }
 

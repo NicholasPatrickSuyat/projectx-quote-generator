@@ -14,6 +14,7 @@ import {
   restoreQuote,
   returnQuoteToDraft,
 } from "@/lib/quotes/mutations";
+import { createQuotePdfSnapshot } from "@/lib/pdf/snapshot";
 import { withRecalculatedTotals } from "@/lib/quotes/calculations";
 import { startOfDay, toIsoDate } from "@/lib/format";
 import type { Quote, QuoteCustomerSnapshot } from "@/types/quote";
@@ -83,7 +84,7 @@ function stampUpdatedAt(quote: Quote): Quote {
 }
 
 export function QuoteSessionProvider({ children }: { children: ReactNode }) {
-  const { ready: settingsReady, getQuoteDefaults } =
+  const { ready: settingsReady, getQuoteDefaults, settings } =
     useCompanySettingsSession();
   const today = useClientToday();
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -164,7 +165,12 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       duplicate,
       archive: (id) => mutate(id, archiveQuote),
       restore: (id) => mutate(id, restoreQuote),
-      markSent: (id) => mutate(id, markQuoteSent),
+      markSent: (id) =>
+        mutate(id, (quote, day) => {
+          const frozenAt = toIsoDate(startOfDay(day));
+          const snapshot = createQuotePdfSnapshot(quote, settings, frozenAt);
+          return markQuoteSent(quote, day, snapshot);
+        }),
       returnToDraft: (id) => mutate(id, returnQuoteToDraft),
       markAccepted: (id) => mutate(id, markQuoteAccepted),
       markRejected: (id) => mutate(id, markQuoteRejected),
@@ -174,7 +180,7 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
           reactivateQuoteToDraft(quote, day, getQuoteDefaults()),
         ),
     };
-  }, [quotes, seeded, today, settingsReady, getQuoteDefaults]);
+  }, [quotes, seeded, today, settingsReady, getQuoteDefaults, settings]);
 
   return (
     <QuoteSessionContext.Provider value={value}>

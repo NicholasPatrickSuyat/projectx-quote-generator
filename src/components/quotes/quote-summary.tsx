@@ -12,6 +12,8 @@ type QuoteSummaryProps = {
   onArchive: () => void;
   onRestore: () => void;
   onGeneratePdf: () => void;
+  generatePdfLabel?: string;
+  generatePdfBusy?: boolean;
   onEdit: () => void;
 };
 
@@ -30,6 +32,8 @@ export function QuoteSummary({
   onArchive,
   onRestore,
   onGeneratePdf,
+  generatePdfLabel = "Generate PDF",
+  generatePdfBusy = false,
   onEdit,
 }: QuoteSummaryProps) {
   const snap = quote.customerSnapshot;
@@ -172,8 +176,9 @@ export function QuoteSummary({
           type="button"
           className={buttonClassName({ variant: "secondary", size: "sm" })}
           onClick={onGeneratePdf}
+          disabled={generatePdfBusy}
         >
-          Generate PDF
+          {generatePdfBusy ? "Generating…" : generatePdfLabel}
         </button>
         {quote.archived ? (
           <button

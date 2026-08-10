@@ -3,6 +3,10 @@
 import { QuoteBulkBar } from "@/components/quotes/quote-bulk-bar";
 import { QuoteFilterChips } from "@/components/quotes/quote-filter-chips";
 import { QuoteSummary } from "@/components/quotes/quote-summary";
+import {
+  PdfActionStatus,
+  useQuotePdfActions,
+} from "@/components/pdf/pdf-action-status";
 import { IconFileText, IconPlus, IconSearch } from "@/components/icons";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
@@ -22,6 +26,7 @@ import {
 import { SearchInput } from "@/components/ui/search-input";
 import { SlideOver } from "@/components/ui/slide-over";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
 import { useQuoteSession } from "@/components/session/quote-session-provider";
 import { DATE_PRESETS, type DatePresetId } from "@/lib/dashboard/date-presets";
 import { cn } from "@/lib/cn";
@@ -37,6 +42,7 @@ import {
   type QuoteFilters,
   type QuoteSortKey,
 } from "@/lib/quotes/filters";
+import { resolveQuotePdfMode } from "@/lib/pdf/render-quote-pdf";
 import { formatCurrency, formatShortDate } from "@/lib/format";
 import { quoteStatusTone, QUOTE_STATUSES, type Quote } from "@/types/quote";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -49,7 +55,6 @@ type ConfirmState =
   | { type: "restore"; quote: Quote }
   | { type: "bulk-archive" }
   | { type: "bulk-restore" }
-  | { type: "pdf" }
   | null;
 
 const SORT_COLUMN_MAP: Record<string, QuoteSortKey> = {
@@ -89,6 +94,13 @@ export function QuotesView() {
     restore,
     duplicate,
   } = useQuoteSession();
+  const { settings } = useCompanySettingsSession();
+  const {
+    pdfState,
+    pdfBusy,
+    runGenerateForQuote,
+    clearPdfState,
+  } = useQuotePdfActions({ settings, today });
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -318,10 +330,19 @@ export function QuotesView() {
       case "bulk-restore":
         applyBulkRestore();
         break;
-      case "pdf":
-        break;
     }
     setConfirm(null);
+  }
+
+  function handleGeneratePdf(quote: Quote) {
+    if (pdfBusy) return;
+    runGenerateForQuote(quote);
+  }
+
+  function pdfActionLabel(quote: Quote): string {
+    return resolveQuotePdfMode(quote) === "final"
+      ? "Generate Final PDF"
+      : "Preview PDF";
   }
 
   const hasRestrictiveFilters =
@@ -482,8 +503,8 @@ export function QuotesView() {
               },
               {
                 id: "pdf",
-                label: "Generate PDF",
-                onSelect: () => setConfirm({ type: "pdf" }),
+                label: pdfActionLabel(row),
+                onSelect: () => handleGeneratePdf(row),
               },
               row.archived
                 ? {
@@ -537,14 +558,6 @@ export function QuotesView() {
           title: "Restore selected quotes?",
           description: `${selectedVisibleCount} quote${selectedVisibleCount === 1 ? "" : "s"} will return to their previous status.`,
           confirmLabel: "Restore",
-          tone: "primary" as const,
-        };
-      case "pdf":
-        return {
-          title: "Generate PDF",
-          description:
-            "PDF generation will be available in the PDF milestone.",
-          confirmLabel: "Got it",
           tone: "primary" as const,
         };
     }
@@ -799,8 +812,8 @@ export function QuotesView() {
                       },
                       {
                         id: "pdf",
-                        label: "Generate PDF",
-                        onSelect: () => setConfirm({ type: "pdf" }),
+                        label: pdfActionLabel(quote),
+                        onSelect: () => handleGeneratePdf(quote),
                       },
                       quote.archived
                         ? {
@@ -887,11 +900,17 @@ export function QuotesView() {
             onRestore={() =>
               setConfirm({ type: "restore", quote: selectedQuote })
             }
-            onGeneratePdf={() => setConfirm({ type: "pdf" })}
+            onGeneratePdf={() => handleGeneratePdf(selectedQuote)}
+            generatePdfLabel={pdfActionLabel(selectedQuote)}
+            generatePdfBusy={pdfBusy}
             onEdit={() => handleEdit(selectedQuote)}
           />
         ) : null}
       </SlideOver>
+
+      <div className="fixed bottom-4 right-4 z-40 max-w-sm">
+        <PdfActionStatus state={pdfState} onDismiss={clearPdfState} />
+      </div>
 
       {confirm && confirmCopy ? (
         <ConfirmDialog
@@ -899,7 +918,7 @@ export function QuotesView() {
           title={confirmCopy.title}
           description={confirmCopy.description}
           confirmLabel={confirmCopy.confirmLabel}
-          cancelLabel={confirm.type === "pdf" ? "Close" : "Cancel"}
+          cancelLabel="Cancel"
           tone={confirmCopy.tone}
           onConfirm={confirmPrimary}
           onCancel={() => setConfirm(null)}

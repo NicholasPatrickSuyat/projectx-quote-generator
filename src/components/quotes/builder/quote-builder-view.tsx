@@ -5,6 +5,10 @@ import { CustomerGate } from "@/components/quotes/builder/customer-gate";
 import { LineItemsEditor } from "@/components/quotes/builder/line-items-editor";
 import { QuoteTotalsPanel } from "@/components/quotes/builder/quote-totals-panel";
 import {
+  PdfActionStatus,
+  useQuotePdfActions,
+} from "@/components/pdf/pdf-action-status";
+import {
   CustomerForm,
   CustomerFormFooter,
 } from "@/components/customers/customer-form";
@@ -35,6 +39,7 @@ import {
   withRecalculatedTotals,
 } from "@/lib/quotes/calculations";
 import { customerToSnapshot, nextLineId } from "@/lib/quotes/demo-data";
+import { createQuotePdfSnapshot } from "@/lib/pdf/snapshot";
 import {
   archiveQuote,
   markQuoteAccepted,
@@ -58,6 +63,7 @@ import {
   formatShortDate,
   parseLocalDate,
   startOfDay,
+  toIsoDate,
 } from "@/lib/format";
 import type { CustomerFormValues } from "@/types/customer";
 import {
@@ -81,7 +87,6 @@ type ConfirmState =
   | { type: "sentEdit" }
   | { type: "changeCustomerSent" }
   | { type: "markSent" }
-  | { type: "previewPdf" }
   | { type: "finalPdf" }
   | { type: "returnToDraft" }
   | { type: "accepted" }
@@ -178,7 +183,15 @@ export function QuoteBuilderView({
   } = useQuoteSession();
   const { ready: customersReady, customers, getCustomer, createCustomer } =
     useCustomerSession();
-  const { getQuoteDefaults } = useCompanySettingsSession();
+  const { getQuoteDefaults, settings } = useCompanySettingsSession();
+  const {
+    pdfState,
+    pdfBusy,
+    runPreview,
+    runFinalFromSnapshot,
+    runFinalAfterSend,
+    clearPdfState,
+  } = useQuotePdfActions({ settings, today });
 
   const [initialized, setInitialized] = useState(false);
   const [draft, setDraft] = useState<Quote | null>(null);
@@ -485,6 +498,101 @@ export function QuoteBuilderView({
     setConfirm({ type: "markSent" });
   }
 
+  function handlePreviewPdf() {
+    if (!recalculatedDraft || pdfBusy) return;
+    clearPdfState();
+    void runPreview(recalculatedDraft);
+  }
+
+  function handleFinalPdf() {
+    if (!recalculatedDraft || pdfBusy) return;
+    clearPdfState();
+
+    if (recalculatedDraft.pdfSnapshot && recalculatedDraft.status !== "Draft") {
+      void runFinalFromSnapshot(recalculatedDraft);
+      return;
+    }
+
+    const sanitized = withRecalculatedTotals({
+      ...recalculatedDraft,
+      lineItems: stripEmptyLines(recalculatedDraft.lineItems),
+    });
+    setDraft(sanitized);
+
+    const check = canMarkAsSent(sanitized);
+    if (!check.ok) {
+      applyValidationFailure(check.errors, check.reason);
+      return;
+    }
+
+    setConfirm({ type: "finalPdf" });
+  }
+
+  async function confirmFinalPdfAndSend() {
+    if (!recalculatedDraft || !today || pdfBusy) return;
+    setConfirm(null);
+
+    const sanitized = withRecalculatedTotals({
+      ...recalculatedDraft,
+      lineItems: stripEmptyLines(recalculatedDraft.lineItems),
+    });
+
+    const check = canMarkAsSent(sanitized);
+    if (!check.ok) {
+      applyValidationFailure(check.errors, check.reason);
+      setDraft(sanitized);
+      return;
+    }
+
+    const frozenAt = toIsoDate(startOfDay(today));
+    let snapshot;
+    try {
+      snapshot = createQuotePdfSnapshot(sanitized, settings, frozenAt);
+    } catch (error) {
+      applyValidationFailure(
+        {},
+        error instanceof Error
+          ? error.message
+          : "Could not freeze the PDF snapshot.",
+      );
+      return;
+    }
+
+    const sent = markQuoteSent(sanitized, today, snapshot);
+    const savedQuote = upsertQuote(sent);
+    setDraft(savedQuote);
+    setBaseline(savedQuote);
+    setLastSavedAt(savedQuote.updatedAt);
+    setFieldErrors({});
+    setStatusMessage(null);
+    setSentEditingUnlocked(false);
+
+    // Keep create-route mounted until PDF finishes so ready/error UI is not lost.
+    await runFinalAfterSend(savedQuote);
+
+    if (mode === "create") {
+      router.replace(`/quotes/${savedQuote.id}/edit`);
+    }
+  }
+
+  function confirmReturnToDraft() {
+    if (!recalculatedDraft || !today) return;
+    setConfirm(null);
+
+    const sanitized = withRecalculatedTotals({
+      ...recalculatedDraft,
+      lineItems: stripEmptyLines(recalculatedDraft.lineItems),
+    });
+    const updated = returnQuoteToDraft(sanitized, today);
+    const savedQuote = upsertQuote(updated);
+    setDraft(savedQuote);
+    setBaseline(savedQuote);
+    setLastSavedAt(savedQuote.updatedAt);
+    setFieldErrors({});
+    setStatusMessage(null);
+    setSentEditingUnlocked(true);
+  }
+
   function requestStatusConfirm(
     type:
       | "returnToDraft"
@@ -502,8 +610,14 @@ export function QuoteBuilderView({
       lineItems: stripEmptyLines(recalculatedDraft.lineItems),
     });
 
-    // Preview validation before opening the confirm dialog so invalid
-    // dirty state never reaches a locking transition.
+    // Return to Draft is an escape hatch — do not require Final/status persist validation.
+    if (type === "returnToDraft") {
+      setDraft(sanitized);
+      setConfirm({ type });
+      return;
+    }
+
+    // Other locking transitions still require a valid persistable quote.
     const errors = validateQuoteForPersist(sanitized);
     if (hasQuoteFieldErrors(errors)) {
       applyValidationFailure(
@@ -610,7 +724,6 @@ export function QuoteBuilderView({
 
   const suspendForDialog = Boolean(
     confirm &&
-      confirm.type !== "previewPdf" &&
       confirm.type !== "finalPdf",
   );
 
@@ -685,6 +798,8 @@ export function QuoteBuilderView({
             {statusMessage}
           </div>
         ) : null}
+
+        <PdfActionStatus state={pdfState} onDismiss={clearPdfState} />
 
         {fieldErrors.lineItems ? (
           <div
@@ -901,8 +1016,9 @@ export function QuoteBuilderView({
             }
             onTaxRateChange={(taxRate) => updateDraft({ taxRate })}
             onSaveDraft={handleSaveDraft}
-            onPreviewPdf={() => setConfirm({ type: "previewPdf" })}
-            onFinalPdf={() => setConfirm({ type: "finalPdf" })}
+            pdfBusy={pdfBusy}
+            onPreviewPdf={handlePreviewPdf}
+            onFinalPdf={handleFinalPdf}
             onMarkSent={handleMarkSent}
             onReturnToDraft={() => requestStatusConfirm("returnToDraft")}
             onAccepted={() => requestStatusConfirm("accepted")}
@@ -1011,49 +1127,41 @@ export function QuoteBuilderView({
       <ConfirmDialog
         open={confirm?.type === "markSent"}
         title="Mark quote as Sent?"
-        description="The quote status will change to Sent and today’s Sent Date will be recorded. For this demo session, the current customer snapshot and quote contents represent the sent version. No PDF is generated or delivered."
+        description="The quote will be marked Sent, today’s Sent Date will be recorded, and a frozen PDF snapshot will be saved. No PDF file will be generated. Use Final PDF if you also need the customer document."
         confirmLabel="Mark as Sent"
         tone="primary"
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
-          persistAndMutate(markQuoteSent);
+          persistAndMutate((quote, day) => {
+            const frozenAt = toIsoDate(startOfDay(day));
+            const snapshot = createQuotePdfSnapshot(quote, settings, frozenAt);
+            return markQuoteSent(quote, day, snapshot);
+          });
         }}
       />
 
       <ConfirmDialog
-        open={confirm?.type === "previewPdf"}
-        title="Preview PDF"
-        description="PDF Preview will be implemented in the PDF milestone."
-        confirmLabel="OK"
-        cancelLabel="Close"
-        tone="primary"
-        onCancel={() => setConfirm(null)}
-        onConfirm={() => setConfirm(null)}
-      />
-
-      <ConfirmDialog
         open={confirm?.type === "finalPdf"}
-        title="Generate Final PDF"
-        description="Final PDF generation will be implemented in the PDF milestone. For now, use Mark as Sent to record that this quote was sent—no file is generated or delivered."
-        confirmLabel="OK"
-        cancelLabel="Close"
+        title="Generate Final PDF and mark Sent?"
+        description="This saves the current quote, freezes a customer PDF snapshot, marks the quote as Sent, records today’s Sent Date, and opens the Final PDF (no DRAFT watermark)."
+        confirmLabel="Generate Final PDF"
+        cancelLabel="Cancel"
         tone="primary"
         onCancel={() => setConfirm(null)}
-        onConfirm={() => setConfirm(null)}
+        onConfirm={() => {
+          void confirmFinalPdfAndSend();
+        }}
       />
 
       <ConfirmDialog
         open={confirm?.type === "returnToDraft"}
         title="Return to Draft?"
-        description="This moves the quote back to Draft status."
+        description="This moves the quote back to Draft and clears the frozen sent PDF snapshot so a later Final PDF or Mark as Sent creates a new official version."
         confirmLabel="Return to Draft"
         tone="primary"
         onCancel={() => setConfirm(null)}
-        onConfirm={() => {
-          setConfirm(null);
-          persistAndMutate(returnQuoteToDraft);
-        }}
+        onConfirm={confirmReturnToDraft}
       />
 
       <ConfirmDialog

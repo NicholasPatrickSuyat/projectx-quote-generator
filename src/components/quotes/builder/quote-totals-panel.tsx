@@ -14,6 +14,7 @@ type QuoteTotalsPanelProps = {
   editable: boolean;
   saved: boolean;
   saving: boolean;
+  pdfBusy?: boolean;
   discountError?: string;
   taxRateError?: string;
   lastSavedAt: string | null;
@@ -249,6 +250,7 @@ function PanelContent(props: QuoteTotalsPanelProps) {
   const {
     editable,
     saving,
+    pdfBusy = false,
     lastSavedAt,
     onSaveDraft,
     onPreviewPdf,
@@ -269,16 +271,26 @@ function PanelContent(props: QuoteTotalsPanelProps) {
             type="button"
             variant="primary"
             onClick={onSaveDraft}
-            disabled={saving}
+            disabled={saving || pdfBusy}
           >
             {saving ? "Saving…" : "Save Draft"}
           </Button>
         ) : null}
-        <Button type="button" variant="secondary" onClick={onPreviewPdf}>
-          Preview PDF
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onPreviewPdf}
+          disabled={pdfBusy}
+        >
+          {pdfBusy ? "Generating…" : "Preview PDF"}
         </Button>
-        <Button type="button" variant="secondary" onClick={onFinalPdf}>
-          Final PDF
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onFinalPdf}
+          disabled={pdfBusy}
+        >
+          {pdfBusy ? "Generating…" : "Final PDF"}
         </Button>
       </div>
       <div className="border-t border-border-default pt-4">
