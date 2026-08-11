@@ -28,7 +28,7 @@ import {
 } from "@/lib/customers/demo-data";
 import { useCustomerSession } from "@/components/session/customer-session-provider";
 import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
-import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
+import { useUnsavedNavigationGuard } from "@/lib/navigation/use-unsaved-navigation-guard";
 import {
   DEFAULT_CUSTOMER_FILTERS,
   filterCustomers,
@@ -145,9 +145,11 @@ export function CustomersView() {
 
   const dirty = !formsEqual(formValues, baselineForm);
   const formId = "customer-form";
-  useRegisterUnsavedChanges(
-    (panelMode === "create" || panelMode === "edit") && dirty,
-  );
+  const formIsDirty =
+    (panelMode === "create" || panelMode === "edit") && dirty;
+  const { leaveDialog, isLeavePromptOpen } = useUnsavedNavigationGuard({
+    isDirty: formIsDirty,
+  });
 
   function openCreate() {
     const blank = emptyCustomerForm();
@@ -652,7 +654,7 @@ export function CustomersView() {
         description={panelDescription}
         onClose={requestClosePanel}
         wide
-        suspendInteractions={confirm !== null}
+        suspendInteractions={confirm !== null || isLeavePromptOpen}
         focusKey={panelMode}
         footer={
           panelMode === "create" || panelMode === "edit" ? (
@@ -766,6 +768,8 @@ export function CustomersView() {
           closePanel();
         }}
       />
+
+      {leaveDialog}
     </PageContainer>
   );
 }

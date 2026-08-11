@@ -3,6 +3,7 @@
 import { IconClose } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/cn";
+import { lockBodyScroll } from "@/lib/navigation/body-scroll-lock";
 import {
   useEffect,
   useId,
@@ -83,8 +84,7 @@ export function SlideOver({
     const panel = panelRef.current;
     if (!panel) return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockBody = lockBodyScroll();
 
     const justOpened = !wasOpenRef.current;
     wasOpenRef.current = true;
@@ -130,7 +130,7 @@ export function SlideOver({
     window.addEventListener("keydown", onKeyDown);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlockBody();
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open, suspendInteractions, focusKey]);

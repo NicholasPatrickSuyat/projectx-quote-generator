@@ -8,11 +8,7 @@ import {
   startOfDay,
   toIsoDate,
 } from "@/lib/format";
-import {
-  QUOTE_STATUSES,
-  type DemoQuote,
-  type QuoteStatus,
-} from "@/types/quote";
+import { QUOTE_STATUSES, type Quote, type QuoteStatus } from "@/types/quote";
 
 const ATTENTION_LIMIT = 5;
 
@@ -40,12 +36,16 @@ export type NeedsAttention = {
   recentlySent: AttentionItem[];
 };
 
-export function activeQuotes(quotes: DemoQuote[]): DemoQuote[] {
+function customerName(quote: Quote): string {
+  return quote.customerSnapshot?.customerName?.trim() || "Unknown customer";
+}
+
+export function activeQuotes(quotes: Quote[]): Quote[] {
   return quotes.filter((quote) => !quote.archived);
 }
 
 /** Current non-archived totals by status. Not date-filtered. */
-export function getStatusCounts(quotes: DemoQuote[]): StatusCounts {
+export function getStatusCounts(quotes: Quote[]): StatusCounts {
   const counts = Object.fromEntries(
     QUOTE_STATUSES.map((status) => [status, 0]),
   ) as StatusCounts;
@@ -58,7 +58,7 @@ export function getStatusCounts(quotes: DemoQuote[]): StatusCounts {
 }
 
 export function getSummaryMetrics(
-  quotes: DemoQuote[],
+  quotes: Quote[],
   range: DateRange,
   today: Date = new Date(),
 ): SummaryMetrics {
@@ -76,17 +76,17 @@ export function getSummaryMetrics(
     if (isDateInRange(quote.createdAt, range)) {
       quotesCreated += 1;
     }
-    if (isDateInRange(quote.sentAt, range)) {
+    if (quote.sentAt && isDateInRange(quote.sentAt, range)) {
       quotesSent += 1;
     }
-    if (isDateInRange(quote.acceptedAt, range)) {
+    if (quote.acceptedAt && isDateInRange(quote.acceptedAt, range)) {
       quotesAccepted += 1;
-      acceptedQuoteValue += quote.total;
+      acceptedQuoteValue += quote.grandTotal;
     }
     if (
-      quote.expiresAt &&
-      quote.expiresAt >= todayIso &&
-      quote.expiresAt <= soonIso &&
+      quote.validUntil &&
+      quote.validUntil >= todayIso &&
+      quote.validUntil <= soonIso &&
       (quote.status === "Draft" || quote.status === "Sent")
     ) {
       expiringWithin7Days += 1;
@@ -103,7 +103,7 @@ export function getSummaryMetrics(
 }
 
 export function getNeedsAttention(
-  quotes: DemoQuote[],
+  quotes: Quote[],
   today: Date = new Date(),
 ): NeedsAttention {
   const active = activeQuotes(quotes);
@@ -120,28 +120,27 @@ export function getNeedsAttention(
     .slice(0, ATTENTION_LIMIT)
     .map((quote) => ({
       id: quote.id,
-      number: quote.number,
-      customerName: quote.customerName,
+      number: quote.id,
+      customerName: customerName(quote),
       meta: `Draft since ${formatShortDate(quote.createdAt)}`,
-      // Filter-only deep-links until Dashboard/Quotes demo seeds are unified.
       href: `/quotes?attention=drafts-stale`,
     }));
 
   const expiringSoon = active
     .filter(
       (quote) =>
-        quote.expiresAt &&
-        quote.expiresAt >= todayIso &&
-        quote.expiresAt <= soonIso &&
+        quote.validUntil &&
+        quote.validUntil >= todayIso &&
+        quote.validUntil <= soonIso &&
         (quote.status === "Draft" || quote.status === "Sent"),
     )
-    .sort((a, b) => (a.expiresAt ?? "").localeCompare(b.expiresAt ?? ""))
+    .sort((a, b) => (a.validUntil ?? "").localeCompare(b.validUntil ?? ""))
     .slice(0, ATTENTION_LIMIT)
     .map((quote) => ({
       id: quote.id,
-      number: quote.number,
-      customerName: quote.customerName,
-      meta: `Expires ${formatShortDate(quote.expiresAt ?? quote.createdAt)}`,
+      number: quote.id,
+      customerName: customerName(quote),
+      meta: `Expires ${formatShortDate(quote.validUntil ?? quote.createdAt)}`,
       href: `/quotes?expiringSoon=1`,
     }));
 
@@ -151,8 +150,8 @@ export function getNeedsAttention(
     .slice(0, ATTENTION_LIMIT)
     .map((quote) => ({
       id: quote.id,
-      number: quote.number,
-      customerName: quote.customerName,
+      number: quote.id,
+      customerName: customerName(quote),
       meta: `Sent ${formatShortDate(quote.sentAt ?? quote.createdAt)}`,
       href: `/quotes?attention=awaiting-response`,
     }));

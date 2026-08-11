@@ -1,5 +1,6 @@
 "use client";
 
+import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { getDemoCustomers, nextCustomerId } from "@/lib/customers/demo-data";
 import { startOfDay, toIsoDate } from "@/lib/format";
 import type { Customer, CustomerFormValues } from "@/types/customer";
@@ -53,6 +54,7 @@ function useClientToday(): Date | null {
 }
 
 export function CustomerSessionProvider({ children }: { children: ReactNode }) {
+  const { capabilities } = useDemoAuthSession();
   const today = useClientToday();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [seeded, setSeeded] = useState(false);
@@ -63,6 +65,8 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
   }
 
   const value = useMemo<CustomerSessionContextValue>(() => {
+    const canRestore = capabilities.canRestore;
+
     function getCustomer(id: string) {
       return customers.find((customer) => customer.id === id);
     }
@@ -117,6 +121,7 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
     }
 
     function restoreCustomer(id: string) {
+      if (!canRestore) return;
       const now = toIsoDate(startOfDay(new Date()));
       setCustomers((prev) =>
         prev.map((customer) =>
@@ -137,7 +142,7 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
       restoreCustomer,
       setCustomers,
     };
-  }, [customers, seeded]);
+  }, [customers, seeded, capabilities.canRestore]);
 
   return (
     <CustomerSessionContext.Provider value={value}>

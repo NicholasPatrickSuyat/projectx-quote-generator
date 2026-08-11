@@ -18,20 +18,6 @@ export type DiscountType = "none" | "percent" | "fixed";
 /** Alias used by the frozen PDF snapshot model. */
 export type QuoteDiscountType = DiscountType;
 
-/** Lightweight quote shape used by the Dashboard demo metrics. */
-export type DemoQuote = {
-  id: string;
-  number: string;
-  customerName: string;
-  status: QuoteStatus;
-  total: number;
-  createdAt: string;
-  sentAt?: string;
-  acceptedAt?: string;
-  expiresAt?: string;
-  archived?: boolean;
-};
-
 export type QuoteCustomerSnapshot = {
   customerId: string;
   customerName: string;

@@ -4,9 +4,8 @@ import { LogoUploadField } from "@/components/settings/logo-upload-field";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
 import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
-import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
+import { useUnsavedNavigationGuard } from "@/lib/navigation/use-unsaved-navigation-guard";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField, fieldControlProps } from "@/components/ui/form-field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import {
@@ -56,14 +55,6 @@ function formatLastSaved(iso: string): string {
   return lastSavedFormatter.format(date);
 }
 
-function isInternalAppHref(href: string): boolean {
-  if (href.startsWith("#")) return false;
-  if (href.startsWith("mailto:") || href.startsWith("tel:")) return false;
-  if (href.startsWith("//")) return false;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return false;
-  return href.startsWith("/");
-}
-
 function focusSettingsField(field: string) {
   const targetId = field === "logo" ? "logo-dropzone" : field;
   const el = document.getElementById(targetId);
@@ -93,12 +84,10 @@ export function SettingsView() {
   const [validationMessage, setValidationMessage] = useState<string | null>(
     null,
   );
-  const [leaveHref, setLeaveHref] = useState<string | null>(null);
   const [focusedTabId, setFocusedTabId] = useState<SettingsTabId>(tab);
   const [pendingFocusField, setPendingFocusField] = useState<string | null>(
     null,
   );
-  const allowLeaveRef = useRef(false);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   if (ready && settings.updatedAt !== syncedKey) {
@@ -113,7 +102,16 @@ export function SettingsView() {
 
   const dirty = !companySettingsFormsEqual(formValues, baseline);
   const editable = canManageSettings;
-  useRegisterUnsavedChanges(dirty && editable);
+  const { leaveDialog } = useUnsavedNavigationGuard({
+    isDirty: dirty && editable,
+    shouldIgnoreHref: (url) =>
+      url.pathname === "/settings" &&
+      window.location.pathname === "/settings",
+    description:
+      "You have unsaved settings edits. Discard them and leave this page?",
+    confirmLabel: "Discard Changes",
+    cancelLabel: "Keep Editing",
+  });
 
   useEffect(() => {
     if (!pendingFocusField) return;
@@ -126,61 +124,6 @@ export function SettingsView() {
 
     return () => window.clearTimeout(timer);
   }, [tab, pendingFocusField]);
-
-  useEffect(() => {
-    if (!dirty) return;
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (allowLeaveRef.current) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirty]);
-
-  useEffect(() => {
-    if (!dirty) return;
-
-    function onDocumentClick(event: MouseEvent) {
-      if (allowLeaveRef.current) return;
-      if (event.defaultPrevented) return;
-      if (event.button !== 0) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-        return;
-      }
-
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-
-      const anchor = target.closest("a[href]");
-      if (!(anchor instanceof HTMLAnchorElement)) return;
-      if (anchor.target === "_blank") return;
-
-      const hrefAttr = anchor.getAttribute("href");
-      if (!hrefAttr || !isInternalAppHref(hrefAttr)) return;
-
-      const url = new URL(hrefAttr, window.location.href);
-      // Tab changes within Settings keep form state — no discard prompt.
-      if (
-        url.pathname === "/settings" &&
-        window.location.pathname === "/settings"
-      ) {
-        return;
-      }
-
-      const next =
-        `${url.pathname}${url.search}${url.hash}` || url.pathname;
-      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      if (next === current) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      setLeaveHref(next);
-    }
-
-    document.addEventListener("click", onDocumentClick, true);
-    return () => document.removeEventListener("click", onDocumentClick, true);
-  }, [dirty]);
 
   function updateField<K extends keyof CompanySettingsFormValues>(
     key: K,
@@ -290,12 +233,6 @@ export function SettingsView() {
     setErrors({});
     setValidationMessage(null);
     setSaveSuccess(true);
-  }
-
-  function leaveTo(href: string) {
-    allowLeaveRef.current = true;
-    setLeaveHref(null);
-    router.push(href);
   }
 
   if (!ready) {
@@ -458,18 +395,7 @@ export function SettingsView() {
         </div>
       </div>
 
-      <ConfirmDialog
-        open={leaveHref !== null}
-        title="Discard unsaved changes?"
-        description="You have unsaved settings edits. Discard them and leave this page?"
-        confirmLabel="Discard Changes"
-        cancelLabel="Keep Editing"
-        tone="danger"
-        onCancel={() => setLeaveHref(null)}
-        onConfirm={() => {
-          if (leaveHref) leaveTo(leaveHref);
-        }}
-      />
+      {leaveDialog}
     </PageContainer>
   );
 }

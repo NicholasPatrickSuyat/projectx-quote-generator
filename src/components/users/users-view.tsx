@@ -19,7 +19,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { SlideOver } from "@/components/ui/slide-over";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
-import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
+import { useUnsavedNavigationGuard } from "@/lib/navigation/use-unsaved-navigation-guard";
 import { emptyUserForm, userToFormValues } from "@/lib/users/demo-data";
 import {
   DEFAULT_USER_FILTERS,
@@ -86,9 +86,9 @@ export function UsersView() {
 
   const dirty = !formsEqual(formValues, baselineForm);
   const panelOpen = panelMode !== "closed";
-  useRegisterUnsavedChanges(
-    (panelMode === "create" || panelMode === "edit") && dirty,
-  );
+  const { leaveDialog, isLeavePromptOpen } = useUnsavedNavigationGuard({
+    isDirty: (panelMode === "create" || panelMode === "edit") && dirty,
+  });
 
   function openCreate() {
     const blank = emptyUserForm();
@@ -424,7 +424,7 @@ export function UsersView() {
               : undefined
         }
         onClose={requestClosePanel}
-        suspendInteractions={confirm !== null}
+        suspendInteractions={confirm !== null || isLeavePromptOpen}
         focusKey={panelMode}
         footer={
           <div className="flex flex-wrap justify-end gap-2">
@@ -601,6 +601,8 @@ export function UsersView() {
           }
         }}
       />
+
+      {leaveDialog}
     </PageContainer>
   );
 }

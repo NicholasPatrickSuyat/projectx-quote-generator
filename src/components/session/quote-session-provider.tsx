@@ -1,6 +1,8 @@
 "use client";
 
 import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
+import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
+import { applyAutoExpirations } from "@/lib/quotes/auto-expire";
 import { getDemoQuotes, nextQuoteId } from "@/lib/quotes/demo-data";
 import {
   archiveQuote,
@@ -14,6 +16,7 @@ import {
   restoreQuote,
   returnQuoteToDraft,
 } from "@/lib/quotes/mutations";
+import { preparedByFromSessionUser } from "@/lib/quotes/prepared-by";
 import { createQuotePdfSnapshot } from "@/lib/pdf/snapshot";
 import { withRecalculatedTotals } from "@/lib/quotes/calculations";
 import { startOfDay, toIsoDate } from "@/lib/format";
@@ -21,7 +24,9 @@ import type { Quote, QuoteCustomerSnapshot } from "@/types/quote";
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -89,30 +94,104 @@ function stampUpdatedAt(quote: Quote): Quote {
 export function QuoteSessionProvider({ children }: { children: ReactNode }) {
   const { ready: settingsReady, getQuoteDefaults, settings } =
     useCompanySettingsSession();
+  const { currentUser, capabilities } = useDemoAuthSession();
   const today = useClientToday();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [seeded, setSeeded] = useState(false);
+  const quotesRef = useRef(quotes);
+
+  useEffect(() => {
+    quotesRef.current = quotes;
+  }, [quotes]);
 
   if (today && !seeded) {
     setSeeded(true);
-    setQuotes(getDemoQuotes(today));
+    setQuotes(applyAutoExpirations(getDemoQuotes(today), today));
   }
 
   const value = useMemo<QuoteSessionContextValue>(() => {
+    const sessionPreparedBy = preparedByFromSessionUser(currentUser?.fullName);
+    const canOverridePreparedBy = capabilities.canOverridePreparedBy;
+    const canRestore = capabilities.canRestore;
+    const canOverrideQuoteStatus = capabilities.canOverrideQuoteStatus;
+
+    function commitQuotes(next: Quote[]) {
+      const expired = today ? applyAutoExpirations(next, today) : next;
+      quotesRef.current = expired;
+      setQuotes(expired);
+      return expired;
+    }
+
     function getQuote(id: string) {
-      return quotes.find((quote) => quote.id === id);
+      return quotesRef.current.find((quote) => quote.id === id);
+    }
+
+    function normalizePreparedBy(
+      incoming: Quote,
+      existing: Quote | undefined,
+    ): Quote {
+      if (canOverridePreparedBy) return incoming;
+
+      if (existing) {
+        return { ...incoming, preparedBy: existing.preparedBy };
+      }
+
+      return {
+        ...incoming,
+        preparedBy: sessionPreparedBy ?? incoming.preparedBy,
+      };
+    }
+
+    /** Block Staff from Admin-only transitions via upsert (Builder persist path). */
+    function enforceCapabilities(
+      incoming: Quote,
+      existing: Quote | undefined,
+    ): Quote {
+      let next = normalizePreparedBy(incoming, existing);
+      if (!existing) return next;
+
+      if (!canRestore && existing.archived && !next.archived) {
+        next = {
+          ...next,
+          archived: true,
+          archivedAt: existing.archivedAt,
+          status: existing.status,
+          statusBeforeArchive: existing.statusBeforeArchive,
+        };
+      }
+
+      if (!canOverrideQuoteStatus) {
+        if (next.status === "Expired" && existing.status !== "Expired") {
+          next = {
+            ...next,
+            status: existing.status,
+            expiredAt: existing.expiredAt,
+          };
+        }
+        if (existing.status === "Expired" && next.status === "Draft") {
+          next = {
+            ...next,
+            status: existing.status,
+            expiredAt: existing.expiredAt,
+            validUntil: existing.validUntil,
+            pdfSnapshot: existing.pdfSnapshot,
+          };
+        }
+      }
+
+      return next;
     }
 
     function upsertQuote(quote: Quote): Quote {
-      const saved = stampUpdatedAt(quote);
-      setQuotes((prev) => {
-        const exists = prev.some((item) => item.id === saved.id);
-        if (exists) {
-          return prev.map((item) => (item.id === saved.id ? saved : item));
-        }
-        return [saved, ...prev];
-      });
-      return saved;
+      const prev = quotesRef.current;
+      const existing = prev.find((item) => item.id === quote.id);
+      const normalized = enforceCapabilities(quote, existing);
+      const saved = stampUpdatedAt(normalized);
+      const merged = existing
+        ? prev.map((item) => (item.id === saved.id ? saved : item))
+        : [saved, ...prev];
+      const next = commitQuotes(merged);
+      return next.find((item) => item.id === saved.id) ?? saved;
     }
 
     function buildDraft(
@@ -122,36 +201,45 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       if (!today) {
         throw new Error("Quote session is not ready");
       }
+      const preparedBy = canOverridePreparedBy
+        ? options?.preparedBy !== undefined
+          ? options.preparedBy
+          : sessionPreparedBy
+        : sessionPreparedBy;
+
       return buildNewDraftQuote(
-        quotes,
+        quotesRef.current,
         today,
         snapshot,
         getQuoteDefaults(),
-        options?.preparedBy !== undefined
-          ? { preparedBy: options.preparedBy }
-          : undefined,
+        preparedBy !== undefined ? { preparedBy } : undefined,
       );
     }
 
     function createDraft(snapshot: QuoteCustomerSnapshot, draft: Quote): Quote {
-      let saved!: Quote;
-      setQuotes((prev) => {
-        const id = prev.some((quote) => quote.id === draft.id)
-          ? nextQuoteId(prev)
-          : draft.id;
-        saved = stampUpdatedAt({
-          ...draft,
-          id,
-          customerSnapshot: snapshot,
-        });
-        return [saved, ...prev.filter((quote) => quote.id !== saved.id)];
-      });
-      return saved;
+      const prev = quotesRef.current;
+      const id = prev.some((quote) => quote.id === draft.id)
+        ? nextQuoteId(prev)
+        : draft.id;
+      const existing = prev.find((quote) => quote.id === id);
+      const normalized = enforceCapabilities(
+        { ...draft, id, customerSnapshot: snapshot },
+        existing,
+      );
+      const saved = stampUpdatedAt(normalized);
+      const merged = [saved, ...prev.filter((quote) => quote.id !== saved.id)];
+      const next = commitQuotes(merged);
+      return next.find((item) => item.id === saved.id) ?? saved;
     }
 
-    function mutate(id: string, fn: (quote: Quote, day: Date) => Quote) {
-      if (!today) return;
-      setQuotes((prev) =>
+    function mutate(
+      id: string,
+      fn: (quote: Quote, day: Date) => Quote,
+      allowed = true,
+    ) {
+      if (!today || !allowed) return;
+      const prev = quotesRef.current;
+      commitQuotes(
         prev.map((quote) => (quote.id === id ? fn(quote, today) : quote)),
       );
     }
@@ -161,17 +249,17 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       options?: { preparedBy?: string },
     ): Quote | null {
       if (!today) return null;
-      let copy: Quote | null = null;
-      setQuotes((prev) => {
-        const source = prev.find((quote) => quote.id === id);
-        if (!source) return prev;
-        copy = duplicateQuote(source, prev, today, getQuoteDefaults());
-        if (options?.preparedBy !== undefined) {
-          copy = { ...copy, preparedBy: options.preparedBy };
-        }
-        return [copy, ...prev];
-      });
-      return copy;
+      const prev = quotesRef.current;
+      const source = prev.find((quote) => quote.id === id);
+      if (!source) return null;
+      let copy = duplicateQuote(source, prev, today, getQuoteDefaults());
+      if (canOverridePreparedBy && options?.preparedBy !== undefined) {
+        copy = { ...copy, preparedBy: options.preparedBy };
+      } else if (sessionPreparedBy !== undefined) {
+        copy = { ...copy, preparedBy: sessionPreparedBy };
+      }
+      const next = commitQuotes([copy, ...prev]);
+      return next.find((item) => item.id === copy.id) ?? copy;
     }
 
     return {
@@ -184,7 +272,7 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       buildDraft,
       duplicate,
       archive: (id) => mutate(id, archiveQuote),
-      restore: (id) => mutate(id, restoreQuote),
+      restore: (id) => mutate(id, restoreQuote, canRestore),
       markSent: (id) =>
         mutate(id, (quote, day) => {
           const frozenAt = toIsoDate(startOfDay(day));
@@ -194,13 +282,27 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       returnToDraft: (id) => mutate(id, returnQuoteToDraft),
       markAccepted: (id) => mutate(id, markQuoteAccepted),
       markRejected: (id) => mutate(id, markQuoteRejected),
-      markExpired: (id) => mutate(id, markQuoteExpired),
+      markExpired: (id) => mutate(id, markQuoteExpired, canOverrideQuoteStatus),
       reactivate: (id) =>
-        mutate(id, (quote, day) =>
-          reactivateQuoteToDraft(quote, day, getQuoteDefaults()),
+        mutate(
+          id,
+          (quote, day) =>
+            reactivateQuoteToDraft(quote, day, getQuoteDefaults()),
+          canOverrideQuoteStatus,
         ),
     };
-  }, [quotes, seeded, today, settingsReady, getQuoteDefaults, settings]);
+  }, [
+    seeded,
+    today,
+    settingsReady,
+    getQuoteDefaults,
+    settings,
+    currentUser?.fullName,
+    capabilities.canOverridePreparedBy,
+    capabilities.canRestore,
+    capabilities.canOverrideQuoteStatus,
+    quotes,
+  ]);
 
   return (
     <QuoteSessionContext.Provider value={value}>

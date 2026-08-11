@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { lockBodyScroll } from "@/lib/navigation/body-scroll-lock";
 import {
   useEffect,
   useId,
@@ -71,8 +72,7 @@ export function ConfirmDialog({
         ? document.activeElement
         : null;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockBody = lockBodyScroll();
 
     // Safest action first: Cancel / Keep editing.
     const focusTimer = window.setTimeout(() => {
@@ -118,7 +118,7 @@ export function ConfirmDialog({
 
     return () => {
       window.clearTimeout(focusTimer);
-      document.body.style.overflow = previousOverflow;
+      unlockBody();
       window.removeEventListener("keydown", onKeyDown, true);
       previousFocusRef.current?.focus?.();
       previousFocusRef.current = null;

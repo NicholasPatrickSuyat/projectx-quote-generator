@@ -8,13 +8,13 @@ import { StatusChart } from "@/components/dashboard/status-chart";
 import { SummaryMetricsCards } from "@/components/dashboard/summary-metrics";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
+import { useQuoteSession } from "@/components/session/quote-session-provider";
 import {
   DEFAULT_DATE_PRESET,
   getDatePresetLabel,
   getDateRange,
   type DatePresetId,
 } from "@/lib/dashboard/date-presets";
-import { getDemoQuotes } from "@/lib/dashboard/demo-data";
 import {
   getNeedsAttention,
   getStatusCounts,
@@ -24,8 +24,7 @@ import {
   type NeedsAttention,
 } from "@/lib/dashboard/metrics";
 import { QUOTE_STATUSES } from "@/types/quote";
-import { startOfDay } from "@/lib/format";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 
 const EMPTY_STATUS_COUNTS = Object.fromEntries(
   QUOTE_STATUSES.map((status) => [status, 0]),
@@ -45,52 +44,23 @@ const EMPTY_ATTENTION: NeedsAttention = {
   recentlySent: [],
 };
 
-let clientTodayMs: number | null = null;
-
-function subscribeToNothing() {
-  return () => {};
-}
-
-function getClientTodayMs(): number | null {
-  if (clientTodayMs === null) {
-    clientTodayMs = startOfDay(new Date()).getTime();
-  }
-  return clientTodayMs;
-}
-
-function getServerTodayMs(): number | null {
-  return null;
-}
-
-/**
- * Resolve "today" only on the client so SSR/prerender
- * never freezes build-time dates into the HTML.
- */
-function useClientToday(): Date | null {
-  const ms = useSyncExternalStore(
-    subscribeToNothing,
-    getClientTodayMs,
-    getServerTodayMs,
-  );
-  return ms === null ? null : new Date(ms);
-}
-
 export function DashboardView() {
   const [preset, setPreset] = useState<DatePresetId>(DEFAULT_DATE_PRESET);
-  const today = useClientToday();
+  const { ready, today, quotes } = useQuoteSession();
   const presetLabel = getDatePresetLabel(preset);
 
-  const quotes = today ? getDemoQuotes(today) : [];
   const range = today ? getDateRange(preset, today) : null;
-  const statusCounts = today ? getStatusCounts(quotes) : EMPTY_STATUS_COUNTS;
+  const statusCounts =
+    ready && today ? getStatusCounts(quotes) : EMPTY_STATUS_COUNTS;
   const metrics =
-    today && range
+    ready && today && range
       ? getSummaryMetrics(quotes, range, today)
       : EMPTY_METRICS;
-  const attention = today ? getNeedsAttention(quotes, today) : EMPTY_ATTENTION;
+  const attention =
+    ready && today ? getNeedsAttention(quotes, today) : EMPTY_ATTENTION;
 
   return (
-    <PageContainer className="gap-8" aria-busy={today ? undefined : true}>
+    <PageContainer className="gap-8" aria-busy={ready ? undefined : true}>
       <PageHeader
         title="Dashboard"
         description="What needs attention · quick actions"

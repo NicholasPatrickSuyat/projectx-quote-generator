@@ -4,6 +4,8 @@ import { IconClose } from "@/components/icons";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { IconButton } from "@/components/ui/icon-button";
+import { acquireHistoryIndexTracking } from "@/lib/navigation/history-index";
+import { lockBodyScroll } from "@/lib/navigation/body-scroll-lock";
 import { useEffect, useState, type ReactNode } from "react";
 
 type AppShellProps = {
@@ -12,6 +14,9 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Tag in-app history entries so dirty Back/Forward can use deterministic indexes.
+  useEffect(() => acquireHistoryIndexTracking(), []);
 
   useEffect(() => {
     if (!mobileNavOpen) {
@@ -25,11 +30,11 @@ export function AppShell({ children }: AppShellProps) {
     };
 
     document.addEventListener("keydown", onKeyDown);
-    document.body.style.overflow = "hidden";
+    const unlockBody = lockBodyScroll();
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = "";
+      unlockBody();
     };
   }, [mobileNavOpen]);
 

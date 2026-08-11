@@ -27,7 +27,7 @@ import { useCustomerSession } from "@/components/session/customer-session-provid
 import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { useQuoteSession } from "@/components/session/quote-session-provider";
 import { preparedByFromSessionUser } from "@/lib/quotes/prepared-by";
-import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
+import { useUnsavedNavigationGuard } from "@/lib/navigation/use-unsaved-navigation-guard";
 import {
   catalogLineDescription,
   type CatalogItem,
@@ -77,7 +77,7 @@ import {
   type QuoteLineItem,
 } from "@/types/quote";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export type QuoteBuilderViewProps = {
   mode: "create" | "edit";
@@ -86,7 +86,6 @@ export type QuoteBuilderViewProps = {
 };
 
 type ConfirmState =
-  | { type: "leave"; href: string }
   | { type: "sentEdit" }
   | { type: "changeCustomerSent" }
   | { type: "markSent" }
@@ -149,26 +148,6 @@ function catalogItemsToLines(
   return lines;
 }
 
-function isInternalAppHref(href: string): boolean {
-  if (!href || href.startsWith("#")) return false;
-  if (
-    href.startsWith("mailto:") ||
-    href.startsWith("tel:") ||
-    href.startsWith("javascript:")
-  ) {
-    return false;
-  }
-  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) {
-    try {
-      const url = new URL(href, window.location.origin);
-      return url.origin === window.location.origin;
-    } catch {
-      return false;
-    }
-  }
-  return href.startsWith("/");
-}
-
 export function QuoteBuilderView({
   mode,
   quoteId,
@@ -215,7 +194,6 @@ export function QuoteBuilderView({
   const [customerFormErrors, setCustomerFormErrors] =
     useState<CustomerFieldErrors>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const allowLeaveRef = useRef(false);
 
   const ready = quotesReady && customersReady && Boolean(today);
 
@@ -229,7 +207,15 @@ export function QuoteBuilderView({
     return serializeQuote(draft) !== serializeQuote(baseline);
   }, [draft, baseline]);
 
-  useRegisterUnsavedChanges(dirty);
+  const { requestNavigation, discardAndNavigate, leaveDialog, isLeavePromptOpen } =
+    useUnsavedNavigationGuard({
+      isDirty: dirty,
+      title: "Leave without saving?",
+      description:
+        "You have unsaved changes. Leave this page and discard them?",
+      confirmLabel: "Leave",
+      cancelLabel: "Keep editing",
+    });
 
   const saved = mode === "edit" && Boolean(quoteId);
 
@@ -312,53 +298,6 @@ export function QuoteBuilderView({
     setBaseline(storeQuote);
     setLastSavedAt(storeQuote.updatedAt);
   }
-
-  useEffect(() => {
-    if (!dirty) return;
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (allowLeaveRef.current) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirty]);
-
-  useEffect(() => {
-    if (!dirty) return;
-
-    function onDocumentClick(event: MouseEvent) {
-      if (allowLeaveRef.current) return;
-      if (event.defaultPrevented) return;
-      if (event.button !== 0) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-        return;
-      }
-
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-
-      const anchor = target.closest("a[href]");
-      if (!(anchor instanceof HTMLAnchorElement)) return;
-      if (anchor.target === "_blank") return;
-
-      const hrefAttr = anchor.getAttribute("href");
-      if (!hrefAttr || !isInternalAppHref(hrefAttr)) return;
-
-      const url = new URL(hrefAttr, window.location.href);
-      const next =
-        `${url.pathname}${url.search}${url.hash}` || url.pathname;
-      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      if (next === current) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      setConfirm({ type: "leave", href: next });
-    }
-
-    document.addEventListener("click", onDocumentClick, true);
-    return () => document.removeEventListener("click", onDocumentClick, true);
-  }, [dirty]);
 
   const updateDraft = useCallback((patch: Partial<Quote>) => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -648,18 +587,7 @@ export function QuoteBuilderView({
   }
 
   function handleNavigate(href: string) {
-    if (dirty) {
-      setConfirm({ type: "leave", href });
-      return;
-    }
-    allowLeaveRef.current = true;
-    router.push(href);
-  }
-
-  function leaveTo(href: string) {
-    allowLeaveRef.current = true;
-    setConfirm(null);
-    router.push(href);
+    requestNavigation(href);
   }
 
   function handleDuplicate() {
@@ -676,8 +604,7 @@ export function QuoteBuilderView({
       preparedBy !== undefined ? { preparedBy } : undefined,
     );
     if (copy) {
-      allowLeaveRef.current = true;
-      router.push(`/quotes/${copy.id}/edit`);
+      discardAndNavigate(`/quotes/${copy.id}/edit`);
     }
   }
 
@@ -697,8 +624,7 @@ export function QuoteBuilderView({
       preparedBy !== undefined ? { preparedBy } : undefined,
     );
     if (copy) {
-      allowLeaveRef.current = true;
-      router.push(`/quotes/${copy.id}/edit`);
+      discardAndNavigate(`/quotes/${copy.id}/edit`);
     }
   }
 
@@ -711,8 +637,7 @@ export function QuoteBuilderView({
       preparedBy !== undefined ? { preparedBy } : undefined,
     );
     if (copy) {
-      allowLeaveRef.current = true;
-      router.push(`/quotes/${copy.id}/edit`);
+      discardAndNavigate(`/quotes/${copy.id}/edit`);
     }
   }
 
@@ -743,14 +668,12 @@ export function QuoteBuilderView({
     );
   }
 
-  const validUntilWarning = isValidUntilPast(
-    recalculatedDraft.validUntil,
-    today,
-  );
+  const validUntilWarning =
+    recalculatedDraft.status === "Draft" &&
+    isValidUntilPast(recalculatedDraft.validUntil, today);
 
   const suspendForDialog = Boolean(
-    confirm &&
-      confirm.type !== "finalPdf",
+    (confirm && confirm.type !== "finalPdf") || isLeavePromptOpen,
   );
 
   return (
@@ -809,9 +732,8 @@ export function QuoteBuilderView({
           >
             <IconAlert className="mt-0.5 shrink-0" />
             <span>
-              Valid until date is in the past. Status is not changed
-              automatically — update the date or mark expired when
-              appropriate.
+              Valid until date is in the past. Draft quotes stay editable;
+              Sent quotes expire automatically when Valid Until has passed.
             </span>
           </div>
         ) : null}
@@ -1066,6 +988,7 @@ export function QuoteBuilderView({
         open={catalogOpen}
         onClose={() => setCatalogOpen(false)}
         onAdd={handleAddCatalogItems}
+        suspendInteractions={suspendForDialog}
       />
 
       <SlideOver
@@ -1101,20 +1024,6 @@ export function QuoteBuilderView({
         onConfirm={() => {
           setSentEditingUnlocked(true);
           setConfirm(null);
-        }}
-      />
-
-      <ConfirmDialog
-        open={confirm?.type === "leave"}
-        title="Leave without saving?"
-        description="You have unsaved changes. Leave this page and discard them?"
-        confirmLabel="Leave"
-        cancelLabel="Keep editing"
-        tone="danger"
-        onCancel={() => setConfirm(null)}
-        onConfirm={() => {
-          const href = confirm?.type === "leave" ? confirm.href : "/quotes";
-          leaveTo(href);
         }}
       />
 
@@ -1274,6 +1183,8 @@ export function QuoteBuilderView({
           persistAndMutate(restoreQuote);
         }}
       />
+
+      {leaveDialog}
     </>
   );
 }

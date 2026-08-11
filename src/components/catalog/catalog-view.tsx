@@ -6,7 +6,7 @@ import { IconPlus, IconSearch } from "@/components/icons";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
 import { useCatalogSession } from "@/components/session/catalog-session-provider";
-import { useRegisterUnsavedChanges } from "@/lib/navigation/unsaved-changes";
+import { useUnsavedNavigationGuard } from "@/lib/navigation/use-unsaved-navigation-guard";
 import {
   ActiveArchivedToggle,
   FilterBar,
@@ -139,7 +139,9 @@ export function CatalogView() {
   const dirty = !formsEqual(formValues, baselineForm);
   const formIsOpen = panelMode === "create" || panelMode === "edit";
   const formId = "catalog-form";
-  useRegisterUnsavedChanges(formIsOpen && dirty);
+  const { leaveDialog, isLeavePromptOpen } = useUnsavedNavigationGuard({
+    isDirty: formIsOpen && dirty,
+  });
 
   function forceOpenCreate() {
     const blank = emptyCatalogForm();
@@ -705,7 +707,7 @@ export function CatalogView() {
         description={panelDescription}
         onClose={requestClosePanel}
         wide
-        suspendInteractions={confirm !== null}
+        suspendInteractions={confirm !== null || isLeavePromptOpen}
         focusKey={panelMode}
         footer={
           panelMode === "create" || panelMode === "edit" ? (
@@ -808,6 +810,8 @@ export function CatalogView() {
           applyPendingNavigation(pending);
         }}
       />
+
+      {leaveDialog}
     </PageContainer>
   );
 }

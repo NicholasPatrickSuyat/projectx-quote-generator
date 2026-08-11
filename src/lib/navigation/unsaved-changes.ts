@@ -7,10 +7,8 @@ type DirtyChecker = () => boolean;
 const dirtyCheckers = new Set<DirtyChecker>();
 
 /**
- * Lightweight registry so Sign Out can reuse page-level dirty state
- * without a full shared navigation-guard architecture.
- *
- * Broader popstate / cross-route dirty guarding remains a hardening milestone.
+ * Lightweight registry so Sign Out can reuse page-level dirty state.
+ * Pair with `useUnsavedNavigationGuard` for link / Back / Forward prompts.
  */
 export function hasRegisteredUnsavedChanges(): boolean {
   for (const check of dirtyCheckers) {

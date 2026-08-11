@@ -17,6 +17,8 @@ type CatalogPickerProps = {
   open: boolean;
   onClose: () => void;
   onAdd: (items: CatalogItem[]) => void;
+  /** When true, yields keyboard/pointer to a higher overlay (e.g. leave ConfirmDialog). */
+  suspendInteractions?: boolean;
 };
 
 function pruneSelectedIds(
@@ -38,7 +40,12 @@ function pruneSelectedIds(
   return changed ? next : selected;
 }
 
-export function CatalogPicker({ open, onClose, onAdd }: CatalogPickerProps) {
+export function CatalogPicker({
+  open,
+  onClose,
+  onAdd,
+  suspendInteractions = false,
+}: CatalogPickerProps) {
   const { ready, items } = useCatalogSession();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<LineCategory | "all">("all");
@@ -94,6 +101,7 @@ export function CatalogPicker({ open, onClose, onAdd }: CatalogPickerProps) {
       description="Search and select active catalog items to add as line items."
       onClose={handleClose}
       wide
+      suspendInteractions={suspendInteractions}
       footer={
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm text-text-secondary">
