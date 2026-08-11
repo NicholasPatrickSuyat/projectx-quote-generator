@@ -4,7 +4,6 @@ import {
   IconBell,
   IconBuilding,
   IconMenu,
-  IconSearch,
   IconSettings,
 } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
@@ -83,21 +82,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
           </div>
         </div>
 
-        <div className="mx-auto w-full max-w-md flex-1 px-1 sm:px-2">
-          <div
-            className="flex h-10 items-center gap-2 rounded-[var(--radius-md)] border border-border-default bg-bg-muted/70 px-3 text-text-muted"
-            role="search"
-            aria-label="Global search (coming soon)"
-          >
-            <IconSearch className="shrink-0 text-base" />
-            <span className="truncate text-sm">
-              Search customers &amp; quotes…
-            </span>
-            <span className="ml-auto hidden rounded border border-border-default bg-bg-surface px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted sm:inline">
-              Soon
-            </span>
-          </div>
-        </div>
+        <div className="min-w-0 flex-1" aria-hidden />
 
         <div className="flex shrink-0 items-center gap-1">
           <IconButton label="Notifications (coming soon)" disabled>

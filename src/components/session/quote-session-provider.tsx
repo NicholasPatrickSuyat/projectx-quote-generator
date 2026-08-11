@@ -1,6 +1,7 @@
 "use client";
 
 import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
+import { useCustomerSession } from "@/components/session/customer-session-provider";
 import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { applyAutoExpirations } from "@/lib/quotes/auto-expire";
 import { getDemoQuotes, nextQuoteId } from "@/lib/quotes/demo-data";
@@ -94,20 +95,32 @@ function stampUpdatedAt(quote: Quote): Quote {
 export function QuoteSessionProvider({ children }: { children: ReactNode }) {
   const { ready: settingsReady, getQuoteDefaults, settings } =
     useCompanySettingsSession();
+  const { applyQuoteAggregates, ready: customersReady } = useCustomerSession();
   const { currentUser, capabilities } = useDemoAuthSession();
   const today = useClientToday();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [seeded, setSeeded] = useState(false);
   const quotesRef = useRef(quotes);
+  const applyQuoteAggregatesRef = useRef(applyQuoteAggregates);
 
   useEffect(() => {
     quotesRef.current = quotes;
   }, [quotes]);
 
+  useEffect(() => {
+    applyQuoteAggregatesRef.current = applyQuoteAggregates;
+  }, [applyQuoteAggregates]);
+
   if (today && !seeded) {
     setSeeded(true);
     setQuotes(applyAutoExpirations(getDemoQuotes(today), today));
   }
+
+  // Keep customer aggregates aligned with QuoteSession (including initial seed).
+  useEffect(() => {
+    if (!seeded || !customersReady) return;
+    applyQuoteAggregatesRef.current(quotes);
+  }, [seeded, customersReady, quotes]);
 
   const value = useMemo<QuoteSessionContextValue>(() => {
     const sessionPreparedBy = preparedByFromSessionUser(currentUser?.fullName);
@@ -119,6 +132,7 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       const expired = today ? applyAutoExpirations(next, today) : next;
       quotesRef.current = expired;
       setQuotes(expired);
+      applyQuoteAggregatesRef.current(expired);
       return expired;
     }
 

@@ -5,9 +5,31 @@ function daysFrom(today: Date, offset: number): string {
   return toIsoDate(addDays(startOfDay(today), offset));
 }
 
+/** Identity/contact seed only — quote aggregates come from QuoteSession (M15). */
+type CustomerSeedCore = Omit<
+  Customer,
+  | "totalQuotes"
+  | "draftQuotes"
+  | "acceptedQuotes"
+  | "lastQuoteDate"
+  | "recentQuotes"
+>;
+
+const NEUTRAL_QUOTE_AGGREGATES = {
+  totalQuotes: 0,
+  draftQuotes: 0,
+  acceptedQuotes: 0,
+  lastQuoteDate: null,
+  recentQuotes: [] as Customer["recentQuotes"],
+};
+
+function withNeutralAggregates(core: CustomerSeedCore): Customer {
+  return { ...core, ...NEUTRAL_QUOTE_AGGREGATES };
+}
+
 /** Seed 10 demo customers around Dallas. Session mutations clone this list. */
 export function getDemoCustomers(today: Date = new Date()): Customer[] {
-  return [
+  const cores: CustomerSeedCore[] = [
     {
       id: "CUST-000001",
       firstName: "Jane",
@@ -23,26 +45,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -120),
       updatedAt: daysFrom(today, -3),
       archived: false,
-      totalQuotes: 3,
-      draftQuotes: 1,
-      acceptedQuotes: 1,
-      lastQuoteDate: daysFrom(today, -3),
-      recentQuotes: [
-        {
-          id: "q-c1-1",
-          number: "QUO-1056",
-          status: "Draft",
-          date: daysFrom(today, -3),
-          total: 2140,
-        },
-        {
-          id: "q-c1-2",
-          number: "QUO-1038",
-          status: "Accepted",
-          date: daysFrom(today, -28),
-          total: 4560,
-        },
-      ],
     },
     {
       id: "CUST-000002",
@@ -59,26 +61,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -95),
       updatedAt: daysFrom(today, -8),
       archived: false,
-      totalQuotes: 5,
-      draftQuotes: 1,
-      acceptedQuotes: 2,
-      lastQuoteDate: daysFrom(today, -8),
-      recentQuotes: [
-        {
-          id: "q-c2-1",
-          number: "QUO-1048",
-          status: "Draft",
-          date: daysFrom(today, -8),
-          total: 2150,
-        },
-        {
-          id: "q-c2-2",
-          number: "QUO-1022",
-          status: "Accepted",
-          date: daysFrom(today, -40),
-          total: 9120,
-        },
-      ],
     },
     {
       id: "CUST-000003",
@@ -95,19 +77,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -80),
       updatedAt: daysFrom(today, -14),
       archived: false,
-      totalQuotes: 2,
-      draftQuotes: 0,
-      acceptedQuotes: 1,
-      lastQuoteDate: daysFrom(today, -14),
-      recentQuotes: [
-        {
-          id: "q-c3-1",
-          number: "QUO-1044",
-          status: "Accepted",
-          date: daysFrom(today, -14),
-          total: 3210,
-        },
-      ],
     },
     {
       id: "CUST-000004",
@@ -124,26 +93,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -60),
       updatedAt: daysFrom(today, -1),
       archived: false,
-      totalQuotes: 4,
-      draftQuotes: 1,
-      acceptedQuotes: 2,
-      lastQuoteDate: daysFrom(today, -1),
-      recentQuotes: [
-        {
-          id: "q-c4-1",
-          number: "QUO-1055",
-          status: "Draft",
-          date: daysFrom(today, -1),
-          total: 3340,
-        },
-        {
-          id: "q-c4-2",
-          number: "QUO-1031",
-          status: "Sent",
-          date: daysFrom(today, -12),
-          total: 1875,
-        },
-      ],
     },
     {
       id: "CUST-000005",
@@ -160,19 +109,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -45),
       updatedAt: daysFrom(today, -20),
       archived: false,
-      totalQuotes: 1,
-      draftQuotes: 0,
-      acceptedQuotes: 0,
-      lastQuoteDate: daysFrom(today, -20),
-      recentQuotes: [
-        {
-          id: "q-c5-1",
-          number: "QUO-1040",
-          status: "Rejected",
-          date: daysFrom(today, -20),
-          total: 2890,
-        },
-      ],
     },
     {
       id: "CUST-000006",
@@ -189,19 +125,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -30),
       updatedAt: daysFrom(today, -2),
       archived: false,
-      totalQuotes: 2,
-      draftQuotes: 0,
-      acceptedQuotes: 0,
-      lastQuoteDate: daysFrom(today, -2),
-      recentQuotes: [
-        {
-          id: "q-c6-1",
-          number: "QUO-1054",
-          status: "Sent",
-          date: daysFrom(today, -2),
-          total: 1540,
-        },
-      ],
     },
     {
       id: "CUST-000007",
@@ -218,26 +141,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -22),
       updatedAt: daysFrom(today, -9),
       archived: false,
-      totalQuotes: 3,
-      draftQuotes: 0,
-      acceptedQuotes: 1,
-      lastQuoteDate: daysFrom(today, -9),
-      recentQuotes: [
-        {
-          id: "q-c7-1",
-          number: "QUO-1049",
-          status: "Sent",
-          date: daysFrom(today, -9),
-          total: 6420,
-        },
-        {
-          id: "q-c7-2",
-          number: "QUO-1019",
-          status: "Accepted",
-          date: daysFrom(today, -55),
-          total: 7800,
-        },
-      ],
     },
     {
       id: "CUST-000008",
@@ -254,19 +157,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -200),
       updatedAt: daysFrom(today, -35),
       archived: false,
-      totalQuotes: 6,
-      draftQuotes: 0,
-      acceptedQuotes: 3,
-      lastQuoteDate: daysFrom(today, -35),
-      recentQuotes: [
-        {
-          id: "q-c8-1",
-          number: "QUO-1028",
-          status: "Expired",
-          date: daysFrom(today, -35),
-          total: 1980,
-        },
-      ],
     },
     {
       id: "CUST-000009",
@@ -283,19 +173,6 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -18),
       updatedAt: daysFrom(today, -5),
       archived: false,
-      totalQuotes: 2,
-      draftQuotes: 0,
-      acceptedQuotes: 0,
-      lastQuoteDate: daysFrom(today, -5),
-      recentQuotes: [
-        {
-          id: "q-c9-1",
-          number: "QUO-1052",
-          status: "Sent",
-          date: daysFrom(today, -5),
-          total: 2780,
-        },
-      ],
     },
     {
       id: "CUST-000010",
@@ -312,21 +189,10 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       createdAt: daysFrom(today, -150),
       updatedAt: daysFrom(today, -60),
       archived: true,
-      totalQuotes: 2,
-      draftQuotes: 0,
-      acceptedQuotes: 1,
-      lastQuoteDate: daysFrom(today, -90),
-      recentQuotes: [
-        {
-          id: "q-c10-1",
-          number: "QUO-1008",
-          status: "Accepted",
-          date: daysFrom(today, -90),
-          total: 1650,
-        },
-      ],
     },
   ];
+
+  return cores.map(withNeutralAggregates);
 }
 
 export function emptyCustomerForm(): CustomerFormValues {

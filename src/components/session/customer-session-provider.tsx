@@ -2,10 +2,13 @@
 
 import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
 import { getDemoCustomers, nextCustomerId } from "@/lib/customers/demo-data";
+import { applyQuoteAggregatesToCustomers } from "@/lib/customers/quote-aggregates";
 import { startOfDay, toIsoDate } from "@/lib/format";
 import type { Customer, CustomerFormValues } from "@/types/customer";
+import type { Quote } from "@/types/quote";
 import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
   useState,
@@ -21,6 +24,8 @@ type CustomerSessionContextValue = {
   updateCustomer: (id: string, values: CustomerFormValues) => Customer | null;
   archiveCustomer: (id: string) => void;
   restoreCustomer: (id: string) => void;
+  /** Recompute quote aggregates from live QuoteSession quotes (non-archived only). */
+  applyQuoteAggregates: (quotes: Quote[]) => void;
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
 };
 
@@ -63,6 +68,10 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
     setSeeded(true);
     setCustomers(getDemoCustomers(today));
   }
+
+  const applyQuoteAggregates = useCallback((quotes: Quote[]) => {
+    setCustomers((prev) => applyQuoteAggregatesToCustomers(prev, quotes));
+  }, []);
 
   const value = useMemo<CustomerSessionContextValue>(() => {
     const canRestore = capabilities.canRestore;
@@ -140,9 +149,10 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
       updateCustomer,
       archiveCustomer,
       restoreCustomer,
+      applyQuoteAggregates,
       setCustomers,
     };
-  }, [customers, seeded, capabilities.canRestore]);
+  }, [customers, seeded, capabilities.canRestore, applyQuoteAggregates]);
 
   return (
     <CustomerSessionContext.Provider value={value}>

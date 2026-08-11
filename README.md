@@ -4,15 +4,22 @@ Professional quote generation for service businesses such as HVAC, plumbing, roo
 
 ## Status
 
-🚧 In Development
+**Demo-complete V1 (session architecture)** — sellable in-browser demo on Vercel.
+
+| Layer | State |
+|-------|--------|
+| **Demo-complete** | Core Spec §15.4 workflows work end-to-end in this deployment |
+| **Production-ready** | **Not yet** — no durable database; authentication is **DEMO-ONLY** (not production-secure) |
+
+**Production demo:** https://projectx-quote-generator.vercel.app/
 
 ## Tech Stack
 
 - Next.js
 - TypeScript
 - Tailwind CSS
-- Git
-- GitHub
+- `@react-pdf/renderer` (quote PDF)
+- Git / GitHub / Vercel
 
 ## Getting Started
 
@@ -23,6 +30,17 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+### Demo authentication (DEMO-ONLY)
+
+Credentials are checked in the browser session only. This is **not** production security.
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | `alex.admin@demo.projectx.local` | `DemoAdmin!23` |
+| Office Staff | `jordan.staff@demo.projectx.local` | `DemoStaff!23` |
+
+Data (customers, quotes, catalog, settings, users) lives in **in-memory session stores** and reseeds on full reload. Only the demo signed-in user id is kept in `sessionStorage`.
+
 ## Documentation
 
 | Document | Description |
@@ -31,17 +49,54 @@ Open [http://localhost:3000](http://localhost:3000).
 | [UI/UX Planning](docs/02%20-%20UI%20UX%20Planning.md) | Milestone 3 complete — approved wireframes |
 | [Design System](docs/03%20-%20Design%20System.md) | Milestone 4 Approved — Project X visual standard |
 | [Project Structure](docs/project-structure.md) | Codebase layout and conventions |
+| [Milestone 13 plan](docs/milestone-13-implementation-plan.md) | Demo auth + RBAC + Users |
+| [Milestone 14 plan](docs/milestone-14-implementation-plan.md) | Cross-module hardening |
+| [Milestone 15 plan](docs/milestone-15-implementation-plan.md) | Demo readiness & documentation freeze |
 
 ## Roadmap
+
+### Completed (demo architecture)
 
 - [x] Project Initialization
 - [x] Product Specification
 - [x] UI/UX Planning
 - [x] Design System and Visual Style
-- [ ] Authentication
-- [ ] Database
-- [ ] Customer Module
-- [ ] Quote Module
-- [ ] PDF Generator
-- [ ] Dashboard
-- [ ] Deployment
+- [x] Application shell + deployment (Vercel)
+- [x] Dashboard (live QuoteSession)
+- [x] Customers
+- [x] Quotes + Quote Builder
+- [x] Service Catalog
+- [x] Company Settings
+- [x] PDF Preview / Final PDF / frozen snapshots
+- [x] Demo authentication + RBAC + User Management (**DEMO-ONLY**)
+- [x] Cross-module hardening (auto-expire Sent-only, dirty nav, provider RBAC)
+- [ ] Demo readiness polish (docs freeze, customer aggregates, Search stub removal) — Milestone 15 (implemented locally; awaiting commit approval)
+
+### Later (production-ready path — not started)
+
+- [ ] Durable database / persistence
+- [ ] Production authentication + server-side authorization
+- [ ] Email / SMS delivery (explicitly out of current demo scope)
+
+## Sellable demo smoke checklist
+
+**Admin**
+
+1. Sign in with Admin demo credentials  
+2. Dashboard metrics move when you change quote status  
+3. Customers → open a customer → totals match that customer’s quotes  
+4. New Quote → add lines / catalog → Preview PDF → Mark Sent / Final PDF  
+5. Settings + Catalog manage + Users remain available  
+
+**Office Staff**
+
+1. Sign in with Staff demo credentials  
+2. Settings and Users are not reachable  
+3. Catalog is view/pick only (no manage)  
+4. Create/edit quotes; Prepared By is not Staff-editable  
+5. Preview PDF still works  
+
+## Notes
+
+- Product Spec §24 historical checklist is intentionally left as written; this README is the living roadmap.
+- Do not treat client-side RBAC as production security.

@@ -424,7 +424,7 @@ function ProfileFields({
           Company Profile
         </h2>
         <p className="mt-1 text-sm text-text-secondary">
-          Identity and contact details shown in the app shell and future PDFs.
+          Identity and contact details shown in the app shell and on quote PDFs.
         </p>
       </div>
 
@@ -687,8 +687,9 @@ function PdfFields({ values, errors, disabled, onChange }: FieldsProps) {
           PDF Defaults
         </h2>
         <p className="mt-1 text-sm text-text-secondary">
-          Default PDF content for new quotes. PDF generation arrives in a later
-          milestone; these fields are stored now for that work.
+          Default customer-facing message and terms for new quotes. Preview PDF
+          and Final PDF use these defaults until a quote is customized; Final /
+          Mark Sent freeze the quote&apos;s PDF snapshot.
         </p>
       </div>
 
