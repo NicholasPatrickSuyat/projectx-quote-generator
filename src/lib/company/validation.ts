@@ -6,7 +6,24 @@ import type {
 } from "@/types/company";
 import { SETTINGS_FIELD_ORDER } from "@/types/company";
 
-export const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+/**
+ * Max decoded logo bytes for Company Settings.
+ *
+ * Kept below Next.js default Server Action body limit (1 MiB) after base64
+ * data-URL expansion (~4/3) plus the rest of the settings payload.
+ * Do not raise casually without also configuring serverActions.bodySizeLimit.
+ */
+export const LOGO_MAX_BYTES = 512 * 1024;
+
+export function formatLogoMaxLabel(): string {
+  if (LOGO_MAX_BYTES % (1024 * 1024) === 0) {
+    return `${LOGO_MAX_BYTES / (1024 * 1024)} MB`;
+  }
+  if (LOGO_MAX_BYTES % 1024 === 0) {
+    return `${LOGO_MAX_BYTES / 1024} KB`;
+  }
+  return `${LOGO_MAX_BYTES} bytes`;
+}
 
 export const LOGO_ACCEPT =
   "image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp";
@@ -14,6 +31,13 @@ export const LOGO_ACCEPT =
 export const PDF_MESSAGE_MAX = 2000;
 export const PDF_TERMS_MAX = 2000;
 export const PDF_FOOTER_MAX = 500;
+
+/** Aligns with numeric(8,4) and keeps tax rates in a realistic percent range. */
+export const TAX_RATE_MAX_PERCENT = 100;
+/** Aligns with integer days column; 10-year ceiling is plenty for quote validity. */
+export const QUOTE_VALIDITY_DAYS_MAX = 3650;
+/** Aligns with numeric(12,4) fixed-amount discount ceiling. */
+export const DISCOUNT_VALUE_MAX = 99_999_999.9999;
 
 const ALLOWED_LOGO_MIME = new Set<string>([
   "image/png",
@@ -68,6 +92,8 @@ export function validateCompanySettingsForm(
 
   if (!Number.isFinite(values.taxRate) || values.taxRate < 0) {
     errors.taxRate = "Tax rate cannot be negative.";
+  } else if (values.taxRate > TAX_RATE_MAX_PERCENT) {
+    errors.taxRate = `Tax rate cannot exceed ${TAX_RATE_MAX_PERCENT}%.`;
   }
 
   if (
@@ -77,6 +103,8 @@ export function validateCompanySettingsForm(
   ) {
     errors.quoteValidityDays =
       "Validity period must be a whole number of at least 1 day.";
+  } else if (values.quoteValidityDays > QUOTE_VALIDITY_DAYS_MAX) {
+    errors.quoteValidityDays = `Validity period cannot exceed ${QUOTE_VALIDITY_DAYS_MAX.toLocaleString()} days.`;
   }
 
   if (!Number.isFinite(values.discountValue) || values.discountValue < 0) {
@@ -86,6 +114,11 @@ export function validateCompanySettingsForm(
     values.discountValue > 100
   ) {
     errors.discountValue = "Percent discount cannot exceed 100.";
+  } else if (
+    values.discountType !== "percent" &&
+    values.discountValue > DISCOUNT_VALUE_MAX
+  ) {
+    errors.discountValue = `Discount value cannot exceed ${DISCOUNT_VALUE_MAX.toLocaleString()}.`;
   }
 
   if (values.customerFacingMessage.length > PDF_MESSAGE_MAX) {
@@ -121,7 +154,7 @@ export function validateLogoFile(file: File): string | null {
     return "Logo must be a PNG, JPG, JPEG, or WebP image.";
   }
   if (file.size > LOGO_MAX_BYTES) {
-    return "Logo must be 2 MB or smaller.";
+    return `Logo must be ${formatLogoMaxLabel()} or smaller.`;
   }
   return null;
 }
@@ -145,12 +178,32 @@ function validateLogoMeta(logo: NonNullable<CompanyLogo>): string | null {
   if (!ALLOWED_LOGO_MIME.has(logo.mimeType)) {
     return "Logo must be a PNG, JPG, JPEG, or WebP image.";
   }
-  if (logo.byteLength > LOGO_MAX_BYTES) {
-    return "Logo must be 2 MB or smaller.";
-  }
   if (!logo.dataUrl.startsWith("data:image/")) {
     return "Logo data is invalid. Please upload the image again.";
   }
+
+  const comma = logo.dataUrl.indexOf(",");
+  if (comma < 0) {
+    return "Logo data is invalid. Please upload the image again.";
+  }
+  const header = logo.dataUrl.slice(0, comma).toLowerCase();
+  const payload = logo.dataUrl.slice(comma + 1);
+  if (!header.includes("base64")) {
+    return "Logo data is invalid. Please upload the image again.";
+  }
+
+  // Approximate decoded size from base64 payload (ignore whitespace).
+  const cleaned = payload.replace(/\s/g, "");
+  const padding = cleaned.endsWith("==") ? 2 : cleaned.endsWith("=") ? 1 : 0;
+  const decodedBytes = Math.max(0, Math.floor((cleaned.length * 3) / 4) - padding);
+  if (decodedBytes > LOGO_MAX_BYTES || logo.byteLength > LOGO_MAX_BYTES) {
+    return `Logo must be ${formatLogoMaxLabel()} or smaller.`;
+  }
+  // Reject spoofed metadata that under-reports size by a wide margin.
+  if (logo.byteLength > 0 && decodedBytes > logo.byteLength * 2 + 1024) {
+    return "Logo data is invalid. Please upload the image again.";
+  }
+
   return null;
 }
 

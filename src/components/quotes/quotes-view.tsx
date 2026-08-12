@@ -97,14 +97,31 @@ export function QuotesView() {
     restore,
     duplicate,
   } = useQuoteSession();
-  const { settings } = useCompanySettingsSession();
+  const {
+    settings,
+    ready: settingsReady,
+    bootSettled: settingsBootSettled,
+    loadFailed: settingsLoadFailed,
+    lastError: settingsLastError,
+  } = useCompanySettingsSession();
   const { currentUser, capabilities } = useDemoAuthSession();
+
+  const settingsUnavailableMessage = settingsLoadFailed
+    ? (settingsLastError ??
+      "Company settings could not be loaded from the database. Open Settings or refresh after the connection is fixed, then try again.")
+    : "Company settings are still loading. Try again in a moment.";
+
   const {
     pdfState,
     pdfBusy,
     runGenerateForQuote,
     clearPdfState,
-  } = useQuotePdfActions({ settings, today });
+  } = useQuotePdfActions({
+    settings,
+    today,
+    settingsReady,
+    settingsUnavailableMessage,
+  });
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -116,6 +133,7 @@ export function QuotesView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [appliedSearchKey, setAppliedSearchKey] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const searchKey = searchParams.toString();
   const seeded = ready;
@@ -146,13 +164,13 @@ export function QuotesView() {
   }
 
   const createRedirect = useMemo(() => {
-    if (!ready) return null;
+    if (!ready || !settingsReady) return null;
     const parsed = parseQuotesSearchParams(searchParams);
     if (!parsed.create) return null;
     return parsed.customerId
       ? `/quotes/new?customer=${parsed.customerId}`
       : "/quotes/new";
-  }, [ready, searchParams]);
+  }, [ready, settingsReady, searchParams]);
 
   useEffect(() => {
     if (!createRedirect) return;
@@ -259,6 +277,11 @@ export function QuotesView() {
   }
 
   function handleCreate() {
+    if (!settingsReady) {
+      setActionMessage(settingsUnavailableMessage);
+      return;
+    }
+    setActionMessage(null);
     router.push("/quotes/new");
   }
 
@@ -267,6 +290,11 @@ export function QuotesView() {
   }
 
   function handleDuplicate(quote: Quote) {
+    if (!settingsReady) {
+      setActionMessage(settingsUnavailableMessage);
+      return;
+    }
+    setActionMessage(null);
     const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
     const copy = duplicate(
       quote.id,
@@ -274,6 +302,8 @@ export function QuotesView() {
     );
     if (copy) {
       router.push(`/quotes/${copy.id}/edit`);
+    } else {
+      setActionMessage(settingsUnavailableMessage);
     }
   }
 
@@ -344,6 +374,12 @@ export function QuotesView() {
 
   function handleGeneratePdf(quote: Quote) {
     if (pdfBusy) return;
+    const mode = resolveQuotePdfMode(quote);
+    if (mode !== "final" && !settingsReady) {
+      setActionMessage(settingsUnavailableMessage);
+      return;
+    }
+    setActionMessage(null);
     runGenerateForQuote(quote);
   }
 
@@ -351,6 +387,12 @@ export function QuotesView() {
     return resolveQuotePdfMode(quote) === "final"
       ? "Generate Final PDF"
       : "Preview PDF";
+  }
+
+  function pdfActionDisabled(quote: Quote): boolean {
+    if (pdfBusy) return true;
+    if (resolveQuotePdfMode(quote) === "final") return false;
+    return !settingsReady;
   }
 
   const hasRestrictiveFilters =
@@ -401,11 +443,13 @@ export function QuotesView() {
       {
         id: "duplicate",
         label: "Duplicate",
+        disabled: !settingsReady,
         onSelect: () => handleDuplicate(quote),
       },
       {
         id: "pdf",
         label: pdfActionLabel(quote),
+        disabled: pdfActionDisabled(quote),
         onSelect: () => handleGeneratePdf(quote),
       },
     ];
@@ -584,12 +628,38 @@ export function QuotesView() {
         title="Quotes"
         description="Browse and manage quotes for your customers."
         actions={
-          <Button type="button" onClick={handleCreate}>
+          <Button
+            type="button"
+            onClick={handleCreate}
+            disabled={!settingsReady}
+            title={
+              !settingsReady ? settingsUnavailableMessage : undefined
+            }
+          >
             <IconPlus className="size-4" />
             New Quote
           </Button>
         }
       />
+
+      {settingsBootSettled && settingsLoadFailed ? (
+        <p className="text-sm text-danger" role="alert">
+          {settingsUnavailableMessage} New Quote, Duplicate, and PDF Preview are
+          blocked until Settings load successfully. Existing frozen Final PDFs
+          remain available.
+        </p>
+      ) : null}
+      {!settingsReady && !settingsLoadFailed ? (
+        <p className="text-sm text-text-secondary" role="status">
+          Company settings are loading. New Quote, Duplicate, and PDF Preview
+          stay unavailable until Settings are ready.
+        </p>
+      ) : null}
+      {actionMessage ? (
+        <p className="text-sm text-danger" role="alert">
+          {actionMessage}
+        </p>
+      ) : null}
 
       <FilterBar>
         <div className="w-full sm:max-w-sm">
@@ -885,6 +955,8 @@ export function QuotesView() {
             onGeneratePdf={() => handleGeneratePdf(selectedQuote)}
             generatePdfLabel={pdfActionLabel(selectedQuote)}
             generatePdfBusy={pdfBusy}
+            generatePdfDisabled={pdfActionDisabled(selectedQuote)}
+            duplicateDisabled={!settingsReady}
             onEdit={() => handleEdit(selectedQuote)}
           />
         ) : null}

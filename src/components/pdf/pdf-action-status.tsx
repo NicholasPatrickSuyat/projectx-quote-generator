@@ -33,9 +33,20 @@ export type PdfActionState =
 type UseQuotePdfActionsArgs = {
   settings: CompanySettings;
   today: Date | null;
+  /** Live Settings required for Preview / freeze paths — not for Final-from-snapshot. */
+  settingsReady?: boolean;
+  settingsUnavailableMessage?: string;
 };
 
-export function useQuotePdfActions({ settings, today }: UseQuotePdfActionsArgs) {
+const DEFAULT_SETTINGS_UNAVAILABLE =
+  "Company settings are not available. Fix Settings or refresh, then try again.";
+
+export function useQuotePdfActions({
+  settings,
+  today,
+  settingsReady = true,
+  settingsUnavailableMessage = DEFAULT_SETTINGS_UNAVAILABLE,
+}: UseQuotePdfActionsArgs) {
   const [state, setState] = useState<PdfActionState>({ status: "idle" });
   const busy = state.status === "generating";
   const lockRef = useRef(false);
@@ -130,6 +141,15 @@ export function useQuotePdfActions({ settings, today }: UseQuotePdfActionsArgs) 
   }
 
   async function runPreview(quote: Quote) {
+    if (!settingsReady) {
+      if (lockRef.current) return;
+      setState({
+        status: "error",
+        message: settingsUnavailableMessage,
+      });
+      return;
+    }
+
     await runWithLock(
       "Generating preview…",
       async () => {

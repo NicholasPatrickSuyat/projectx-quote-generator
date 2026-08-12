@@ -5,6 +5,7 @@ import { CatalogSummary } from "@/components/catalog/catalog-summary";
 import { IconPlus, IconSearch } from "@/components/icons";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
+import { PersistenceHybridNotice } from "@/components/persistence/persistence-hybrid-notice";
 import { useCatalogSession } from "@/components/session/catalog-session-provider";
 import { useUnsavedNavigationGuard } from "@/lib/navigation/use-unsaved-navigation-guard";
 import {
@@ -91,6 +92,9 @@ export function CatalogView() {
     duplicateItem,
     archiveItem,
     restoreItem,
+    showHybridNotice,
+    lastError,
+    clearMutationError,
   } = useCatalogSession();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -144,6 +148,7 @@ export function CatalogView() {
   });
 
   function forceOpenCreate() {
+    clearMutationError();
     const blank = emptyCatalogForm();
     setSelectedId(null);
     setFormValues(blank);
@@ -161,6 +166,7 @@ export function CatalogView() {
   }
 
   function forceOpenEdit(item: CatalogItem) {
+    clearMutationError();
     const values = catalogToFormValues(item);
     setSelectedId(item.id);
     setFormValues(values);
@@ -177,7 +183,7 @@ export function CatalogView() {
     setBaselineForm(emptyCatalogForm());
   }
 
-  function applyPendingNavigation(pending: PendingNavigation) {
+  async function applyPendingNavigation(pending: PendingNavigation) {
     switch (pending.type) {
       case "close":
         closePanel();
@@ -192,8 +198,12 @@ export function CatalogView() {
         forceOpenEdit(pending.item);
         break;
       case "duplicate": {
-        const copy = duplicateItem(pending.item.id);
-        if (copy) forceOpenSummary(copy);
+        try {
+          const copy = await duplicateItem(pending.item.id);
+          if (copy) forceOpenSummary(copy);
+        } catch {
+          // lastError is set by the catalog session provider
+        }
         break;
       }
       case "archive":
@@ -212,7 +222,7 @@ export function CatalogView() {
       setConfirm({ type: "discard", pending });
       return;
     }
-    applyPendingNavigation(pending);
+    void applyPendingNavigation(pending);
   }
 
   function openCreate() {
@@ -243,7 +253,7 @@ export function CatalogView() {
     requestNavigation({ type: "restore", item });
   }
 
-  function saveItem() {
+  async function saveItem() {
     if (!canManageCatalog) return;
     const nextErrors = validateCatalogForm(formValues);
     setErrors(nextErrors);
@@ -261,22 +271,26 @@ export function CatalogView() {
       description: formValues.description.trim(),
     };
 
-    if (panelMode === "create") {
-      const created = createItem(trimmed);
-      setSelectedId(created.id);
-      setPanelMode("summary");
-      setBaselineForm(catalogToFormValues(created));
-      setFormValues(catalogToFormValues(created));
-      return;
-    }
-
-    if (panelMode === "edit" && selectedId) {
-      const updated = updateItem(selectedId, trimmed);
-      if (updated) {
+    try {
+      if (panelMode === "create") {
+        const created = await createItem(trimmed);
+        setSelectedId(created.id);
         setPanelMode("summary");
-        setBaselineForm(catalogToFormValues(updated));
-        setFormValues(catalogToFormValues(updated));
+        setBaselineForm(catalogToFormValues(created));
+        setFormValues(catalogToFormValues(created));
+        return;
       }
+
+      if (panelMode === "edit" && selectedId) {
+        const updated = await updateItem(selectedId, trimmed);
+        if (updated) {
+          setPanelMode("summary");
+          setBaselineForm(catalogToFormValues(updated));
+          setFormValues(catalogToFormValues(updated));
+        }
+      }
+    } catch {
+      // lastError is set by the catalog session provider; keep the form open.
     }
   }
 
@@ -285,29 +299,37 @@ export function CatalogView() {
     requestNavigation({ type: "duplicate", item });
   }
 
-  function handleArchive(item: CatalogItem) {
+  async function handleArchive(item: CatalogItem) {
     if (!canManageCatalog) return;
-    archiveItem(item.id);
-    if (selectedId === item.id) {
-      const current = items.find((entry) => entry.id === item.id);
-      forceOpenSummary(
-        current
-          ? { ...current, archived: true }
-          : { ...item, archived: true },
-      );
+    try {
+      await archiveItem(item.id);
+      if (selectedId === item.id) {
+        const current = items.find((entry) => entry.id === item.id);
+        forceOpenSummary(
+          current
+            ? { ...current, archived: true }
+            : { ...item, archived: true },
+        );
+      }
+    } catch {
+      // lastError is set by the catalog session provider
     }
   }
 
-  function handleRestore(item: CatalogItem) {
+  async function handleRestore(item: CatalogItem) {
     if (!canManageCatalog) return;
-    restoreItem(item.id);
-    if (selectedId === item.id) {
-      const current = items.find((entry) => entry.id === item.id);
-      forceOpenSummary(
-        current
-          ? { ...current, archived: false }
-          : { ...item, archived: false },
-      );
+    try {
+      await restoreItem(item.id);
+      if (selectedId === item.id) {
+        const current = items.find((entry) => entry.id === item.id);
+        forceOpenSummary(
+          current
+            ? { ...current, archived: false }
+            : { ...item, archived: false },
+        );
+      }
+    } catch {
+      // lastError is set by the catalog session provider
     }
   }
 
@@ -500,6 +522,13 @@ export function CatalogView() {
           ) : null
         }
       />
+
+      <PersistenceHybridNotice show={showHybridNotice} />
+      {lastError ? (
+        <p className="text-sm text-danger" role="alert">
+          {lastError}
+        </p>
+      ) : null}
 
       <FilterBar>
         <div className="w-full sm:max-w-sm">
@@ -757,6 +786,7 @@ export function CatalogView() {
             formId={formId}
             values={formValues}
             errors={errors}
+            formError={lastError}
             onChange={setFormValues}
             onSubmit={saveItem}
           />
@@ -807,7 +837,7 @@ export function CatalogView() {
           if (confirm?.type !== "discard") return;
           const pending = confirm.pending;
           setConfirm(null);
-          applyPendingNavigation(pending);
+          void applyPendingNavigation(pending);
         }}
       />
 

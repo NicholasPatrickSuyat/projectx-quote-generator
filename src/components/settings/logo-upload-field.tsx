@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import {
   LOGO_ACCEPT,
-  LOGO_MAX_BYTES,
+  formatLogoMaxLabel,
   normalizeLogoMime,
   validateLogoFile,
 } from "@/lib/company/validation";
@@ -115,7 +115,7 @@ export function LogoUploadField({
       id={inputId}
       label="Company Logo"
       error={error}
-      hint={`Optional. PNG, JPG, JPEG, or WebP · max ${(LOGO_MAX_BYTES / (1024 * 1024)).toFixed(0)} MB. Shown in the app header after you save.`}
+      hint={`Optional. PNG, JPG, JPEG, or WebP · max ${formatLogoMaxLabel()}. Shown in the app header after you save.`}
     >
       <div className="space-y-3">
         <div

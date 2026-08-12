@@ -1,7 +1,15 @@
 "use client";
 
 import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
-import { getDemoCompanySettings } from "@/lib/company/demo-defaults";
+import {
+  getPersistencePublicInfo,
+  loadCompanySettingsFromDb,
+  saveCompanySettingsToDb,
+} from "@/lib/actions/persistence";
+import {
+  emptyCompanySettingsForm,
+  getDemoCompanySettings,
+} from "@/lib/company/demo-defaults";
 import type {
   CompanyQuoteDefaults,
   CompanySettings,
@@ -11,50 +19,41 @@ import { companyQuoteDefaultsFromSettings } from "@/types/company";
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
-  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
 type CompanySettingsSessionContextValue = {
+  /**
+   * True only when settings finished loading successfully and are safe for
+   * quotes/PDF/branding consumers. False while loading or after a DB load failure.
+   */
   ready: boolean;
+  /** True after boot finished (success or failure). */
+  bootSettled: boolean;
+  persistenceMode: "session" | "database" | null;
+  showHybridNotice: boolean;
   settings: CompanySettings;
+  /** True when database mode failed to load; UI must not treat settings as durable. */
+  loadFailed: boolean;
   canManageSettings: boolean;
   getQuoteDefaults: () => CompanyQuoteDefaults;
-  saveSettings: (values: CompanySettingsFormValues) => CompanySettings;
+  saveSettings: (values: CompanySettingsFormValues) => Promise<CompanySettings>;
+  lastError: string | null;
 };
 
 const CompanySettingsSessionContext =
   createContext<CompanySettingsSessionContextValue | null>(null);
 
-let clientNowMs: number | null = null;
-
-function subscribeToNothing() {
-  return () => {};
+/** Neutral placeholder — not demo marketing data. Used only while loading / failed DB loads. */
+function unloadedSettingsPlaceholder(): CompanySettings {
+  return {
+    ...emptyCompanySettingsForm(),
+    updatedAt: new Date(0).toISOString(),
+  };
 }
-
-function getClientNowMs(): number | null {
-  if (clientNowMs === null) {
-    clientNowMs = Date.now();
-  }
-  return clientNowMs;
-}
-
-function getServerNowMs(): number | null {
-  return null;
-}
-
-function useClientNow(): Date | null {
-  const ms = useSyncExternalStore(
-    subscribeToNothing,
-    getClientNowMs,
-    getServerNowMs,
-  );
-  return ms === null ? null : new Date(ms);
-}
-
-const EMPTY_SETTINGS = getDemoCompanySettings(new Date(0));
 
 export function CompanySettingsSessionProvider({
   children,
@@ -62,24 +61,100 @@ export function CompanySettingsSessionProvider({
   children: ReactNode;
 }) {
   const { capabilities } = useDemoAuthSession();
-  const now = useClientNow();
-  const [settings, setSettings] = useState<CompanySettings>(EMPTY_SETTINGS);
-  const [seeded, setSeeded] = useState(false);
+  const [settings, setSettings] = useState<CompanySettings>(
+    unloadedSettingsPlaceholder(),
+  );
+  const [ready, setReady] = useState(false);
+  const [bootSettled, setBootSettled] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [persistenceMode, setPersistenceMode] = useState<
+    "session" | "database" | null
+  >(null);
+  const [showHybridNotice, setShowHybridNotice] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
-  if (now && !seeded) {
-    setSeeded(true);
-    setSettings(getDemoCompanySettings(now));
-  }
+  useEffect(() => {
+    let cancelled = false;
+    async function boot() {
+      try {
+        const info = await getPersistencePublicInfo();
+        if (cancelled) return;
+        setPersistenceMode(info.mode);
+        setShowHybridNotice(info.showHybridNotice);
+        if (info.mode === "database") {
+          const loaded = await loadCompanySettingsFromDb();
+          if (cancelled) return;
+          setSettings(loaded);
+          setLoadFailed(false);
+          setLastError(null);
+          setReady(true);
+        } else {
+          setSettings(getDemoCompanySettings(new Date()));
+          setLoadFailed(false);
+          setLastError(null);
+          setReady(true);
+        }
+        setBootSettled(true);
+      } catch (error) {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : "Failed to load settings.";
+        setLastError(message);
+        setLoadFailed(true);
+        setSettings(unloadedSettingsPlaceholder());
+        // Keep ready=false so quotes/PDF/branding never consume blank placeholders.
+        setReady(false);
+        setBootSettled(true);
+      }
+    }
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const value = useMemo<CompanySettingsSessionContextValue>(() => {
+    const mutationsEnabled =
+      ready &&
+      persistenceMode !== null &&
+      !(persistenceMode === "database" && loadFailed);
+
     function getQuoteDefaults(): CompanyQuoteDefaults {
+      if (!ready || loadFailed) {
+        throw new Error(
+          "Company settings are not available. Refresh after the database load succeeds.",
+        );
+      }
       return companyQuoteDefaultsFromSettings(settings);
     }
 
-    function saveSettings(values: CompanySettingsFormValues): CompanySettings {
-      if (!capabilities.canManageSettings) {
-        return settings;
+    async function saveSettings(
+      values: CompanySettingsFormValues,
+    ): Promise<CompanySettings> {
+      if (!capabilities.canManageSettings || !mutationsEnabled) {
+        throw new Error(
+          loadFailed
+            ? "Settings failed to load from the database. Refresh before saving."
+            : "Settings are still loading. Wait until persistence is ready before saving.",
+        );
       }
+
+      if (persistenceMode === "database") {
+        try {
+          const saved = await saveCompanySettingsToDb(values);
+          setSettings(saved);
+          setLastError(null);
+          setLoadFailed(false);
+          setReady(true);
+          return saved;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Failed to save settings.";
+          setLastError(message);
+          throw error;
+        }
+      }
+
       const saved: CompanySettings = {
         companyName: values.companyName.trim(),
         logo: values.logo
@@ -109,17 +184,32 @@ export function CompanySettingsSessionProvider({
         updatedAt: new Date().toISOString(),
       };
       setSettings(saved);
+      setLastError(null);
       return saved;
     }
 
     return {
-      ready: seeded,
+      ready,
+      bootSettled,
+      persistenceMode,
+      showHybridNotice,
       settings,
-      canManageSettings: capabilities.canManageSettings,
+      loadFailed,
+      canManageSettings: capabilities.canManageSettings && mutationsEnabled,
       getQuoteDefaults,
       saveSettings,
+      lastError,
     };
-  }, [settings, seeded, capabilities.canManageSettings]);
+  }, [
+    settings,
+    ready,
+    bootSettled,
+    loadFailed,
+    persistenceMode,
+    showHybridNotice,
+    lastError,
+    capabilities.canManageSettings,
+  ]);
 
   return (
     <CompanySettingsSessionContext.Provider value={value}>

@@ -102,6 +102,8 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
   const [seeded, setSeeded] = useState(false);
   const quotesRef = useRef(quotes);
   const applyQuoteAggregatesRef = useRef(applyQuoteAggregates);
+  // Quotes list/edit can seed independently of Settings; Settings-gated
+  // mutations must check settingsReady before calling getQuoteDefaults/settings.
 
   useEffect(() => {
     quotesRef.current = quotes;
@@ -215,6 +217,11 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       if (!today) {
         throw new Error("Quote session is not ready");
       }
+      if (!settingsReady) {
+        throw new Error(
+          "Company settings are not available. Wait until Settings finish loading, or fix the database connection and refresh.",
+        );
+      }
       const preparedBy = canOverridePreparedBy
         ? options?.preparedBy !== undefined
           ? options.preparedBy
@@ -262,7 +269,7 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       id: string,
       options?: { preparedBy?: string },
     ): Quote | null {
-      if (!today) return null;
+      if (!today || !settingsReady) return null;
       const prev = quotesRef.current;
       const source = prev.find((quote) => quote.id === id);
       if (!source) return null;
@@ -277,7 +284,9 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
     }
 
     return {
-      ready: seeded && settingsReady,
+      // Quote browsing/editing does not wait on Settings so frozen PDFs stay usable
+      // after a Settings DB load failure. Settings-gated APIs check settingsReady.
+      ready: seeded,
       today,
       quotes,
       getQuote,
@@ -287,23 +296,24 @@ export function QuoteSessionProvider({ children }: { children: ReactNode }) {
       duplicate,
       archive: (id) => mutate(id, archiveQuote),
       restore: (id) => mutate(id, restoreQuote, canRestore),
-      markSent: (id) =>
+      markSent: (id) => {
+        if (!settingsReady) return;
         mutate(id, (quote, day) => {
           const frozenAt = toIsoDate(startOfDay(day));
           const snapshot = createQuotePdfSnapshot(quote, settings, frozenAt);
           return markQuoteSent(quote, day, snapshot);
-        }),
+        });
+      },
       returnToDraft: (id) => mutate(id, returnQuoteToDraft),
       markAccepted: (id) => mutate(id, markQuoteAccepted),
       markRejected: (id) => mutate(id, markQuoteRejected),
       markExpired: (id) => mutate(id, markQuoteExpired, canOverrideQuoteStatus),
-      reactivate: (id) =>
-        mutate(
-          id,
-          (quote, day) =>
-            reactivateQuoteToDraft(quote, day, getQuoteDefaults()),
-          canOverrideQuoteStatus,
-        ),
+      reactivate: (id) => {
+        if (!settingsReady || !canOverrideQuoteStatus) return;
+        mutate(id, (quote, day) =>
+          reactivateQuoteToDraft(quote, day, getQuoteDefaults()),
+        );
+      },
     };
   }, [
     seeded,

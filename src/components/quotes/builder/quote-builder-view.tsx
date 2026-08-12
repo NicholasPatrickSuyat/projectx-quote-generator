@@ -165,8 +165,21 @@ export function QuoteBuilderView({
   } = useQuoteSession();
   const { ready: customersReady, customers, getCustomer, createCustomer } =
     useCustomerSession();
-  const { getQuoteDefaults, settings } = useCompanySettingsSession();
+  const {
+    ready: settingsReady,
+    bootSettled: settingsBootSettled,
+    loadFailed: settingsLoadFailed,
+    lastError: settingsLastError,
+    getQuoteDefaults,
+    settings,
+  } = useCompanySettingsSession();
   const { currentUser, capabilities } = useDemoAuthSession();
+
+  const settingsUnavailableMessage = settingsLoadFailed
+    ? (settingsLastError ??
+      "Company settings could not be loaded from the database. Open Settings or refresh after the connection is fixed, then try again.")
+    : "Company settings are still loading. Try again in a moment.";
+
   const {
     pdfState,
     pdfBusy,
@@ -174,7 +187,12 @@ export function QuoteBuilderView({
     runFinalFromSnapshot,
     runFinalAfterSend,
     clearPdfState,
-  } = useQuotePdfActions({ settings, today });
+  } = useQuotePdfActions({
+    settings,
+    today,
+    settingsReady,
+    settingsUnavailableMessage,
+  });
 
   const [initialized, setInitialized] = useState(false);
   const [draft, setDraft] = useState<Quote | null>(null);
@@ -195,7 +213,11 @@ export function QuoteBuilderView({
     useState<CustomerFieldErrors>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const ready = quotesReady && customersReady && Boolean(today);
+  const sessionReady = quotesReady && customersReady && Boolean(today);
+  const ready =
+    mode === "create"
+      ? sessionReady && settingsReady
+      : sessionReady;
 
   const activeCustomers = useMemo(
     () => customers.filter((customer) => !customer.archived),
@@ -435,6 +457,10 @@ export function QuoteBuilderView({
 
   function handleMarkSent() {
     if (!recalculatedDraft) return;
+    if (!settingsReady) {
+      setStatusMessage(settingsUnavailableMessage);
+      return;
+    }
 
     const sanitized = withRecalculatedTotals({
       ...recalculatedDraft,
@@ -453,6 +479,10 @@ export function QuoteBuilderView({
 
   function handlePreviewPdf() {
     if (!recalculatedDraft || pdfBusy) return;
+    if (!settingsReady) {
+      setStatusMessage(settingsUnavailableMessage);
+      return;
+    }
     clearPdfState();
     void runPreview(recalculatedDraft);
   }
@@ -463,6 +493,11 @@ export function QuoteBuilderView({
 
     if (recalculatedDraft.pdfSnapshot && recalculatedDraft.status !== "Draft") {
       void runFinalFromSnapshot(recalculatedDraft);
+      return;
+    }
+
+    if (!settingsReady) {
+      setStatusMessage(settingsUnavailableMessage);
       return;
     }
 
@@ -483,6 +518,11 @@ export function QuoteBuilderView({
 
   async function confirmFinalPdfAndSend() {
     if (!recalculatedDraft || !today || pdfBusy) return;
+    if (!settingsReady) {
+      setConfirm(null);
+      setStatusMessage(settingsUnavailableMessage);
+      return;
+    }
     setConfirm(null);
 
     const sanitized = withRecalculatedTotals({
@@ -592,6 +632,10 @@ export function QuoteBuilderView({
 
   function handleDuplicate() {
     if (!recalculatedDraft || !saved) return;
+    if (!settingsReady) {
+      setStatusMessage(settingsUnavailableMessage);
+      return;
+    }
 
     if (dirty) {
       setConfirm({ type: "duplicateDirty" });
@@ -605,11 +649,17 @@ export function QuoteBuilderView({
     );
     if (copy) {
       discardAndNavigate(`/quotes/${copy.id}/edit`);
+    } else {
+      setStatusMessage(settingsUnavailableMessage);
     }
   }
 
   function handleDuplicateDirtyConfirm() {
     setConfirm(null);
+    if (!settingsReady) {
+      setStatusMessage(settingsUnavailableMessage);
+      return;
+    }
     const savedQuote = persistValidatedDraft();
     if (!savedQuote) {
       setConfirm({ type: "duplicateLastSaved" });
@@ -625,12 +675,18 @@ export function QuoteBuilderView({
     );
     if (copy) {
       discardAndNavigate(`/quotes/${copy.id}/edit`);
+    } else {
+      setStatusMessage(settingsUnavailableMessage);
     }
   }
 
   function handleDuplicateLastSavedConfirm() {
     if (!recalculatedDraft) return;
     setConfirm(null);
+    if (!settingsReady) {
+      setStatusMessage(settingsUnavailableMessage);
+      return;
+    }
     const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
     const copy = duplicate(
       recalculatedDraft.id,
@@ -638,12 +694,33 @@ export function QuoteBuilderView({
     );
     if (copy) {
       discardAndNavigate(`/quotes/${copy.id}/edit`);
+    } else {
+      setStatusMessage(settingsUnavailableMessage);
     }
   }
 
   function handleAddCatalogItems(items: CatalogItem[]) {
     if (!draft) return;
     updateLineItems(catalogItemsToLines(items, draft.lineItems));
+  }
+
+  if (
+    mode === "create" &&
+    settingsBootSettled &&
+    (settingsLoadFailed || !settingsReady)
+  ) {
+    return (
+      <PageContainer>
+        <EmptyState
+          title="Company settings unavailable"
+          description={settingsUnavailableMessage}
+          actionLabel="Open Settings"
+          actionHref="/settings"
+          secondaryLabel="Back to Quotes"
+          onSecondary={() => router.push("/quotes")}
+        />
+      </PageContainer>
+    );
   }
 
   if (!ready || !initialized) {
@@ -735,6 +812,17 @@ export function QuoteBuilderView({
               Valid until date is in the past. Draft quotes stay editable;
               Sent quotes expire automatically when Valid Until has passed.
             </span>
+          </div>
+        ) : null}
+
+        {settingsBootSettled && settingsLoadFailed ? (
+          <div
+            role="alert"
+            className="rounded-[var(--radius-md)] border border-danger/30 bg-danger/5 px-3.5 py-2.5 text-sm text-danger"
+          >
+            {settingsUnavailableMessage} Duplicate, Preview PDF, Mark as Sent,
+            Reactivate, and freezing a new Final PDF are blocked. Existing frozen
+            Final PDFs remain available.
           </div>
         ) : null}
 
@@ -967,6 +1055,8 @@ export function QuoteBuilderView({
             onTaxRateChange={(taxRate) => updateDraft({ taxRate })}
             onSaveDraft={handleSaveDraft}
             pdfBusy={pdfBusy}
+            settingsReady={settingsReady}
+            settingsUnavailableMessage={settingsUnavailableMessage}
             onPreviewPdf={handlePreviewPdf}
             onFinalPdf={handleFinalPdf}
             onMarkSent={handleMarkSent}
@@ -1072,6 +1162,10 @@ export function QuoteBuilderView({
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
+          if (!settingsReady) {
+            setStatusMessage(settingsUnavailableMessage);
+            return;
+          }
           persistAndMutate((quote, day) => {
             const frozenAt = toIsoDate(startOfDay(day));
             const snapshot = createQuotePdfSnapshot(quote, settings, frozenAt);
@@ -1145,12 +1239,20 @@ export function QuoteBuilderView({
       <ConfirmDialog
         open={confirm?.type === "reactivate"}
         title="Reactivate quote?"
-        description={`This returns the quote to Draft and extends valid until by ${getQuoteDefaults().quoteValidityDays} days.`}
+        description={
+          settingsReady
+            ? `This returns the quote to Draft and extends valid until by ${settings.quoteValidityDays} days.`
+            : settingsUnavailableMessage
+        }
         confirmLabel="Reactivate"
         tone="primary"
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
+          if (!settingsReady) {
+            setStatusMessage(settingsUnavailableMessage);
+            return;
+          }
           const defaults = getQuoteDefaults();
           persistAndMutate((quote, day) =>
             reactivateQuoteToDraft(quote, day, defaults),

@@ -15,6 +15,9 @@ type QuoteTotalsPanelProps = {
   saved: boolean;
   saving: boolean;
   pdfBusy?: boolean;
+  /** Live Company Settings required for Preview / Duplicate / Mark Sent / Reactivate / new Final freeze. */
+  settingsReady?: boolean;
+  settingsUnavailableMessage?: string;
   discountError?: string;
   taxRateError?: string;
   lastSavedAt: string | null;
@@ -36,6 +39,10 @@ type QuoteTotalsPanelProps = {
   onRestore: () => void;
   onDuplicate: () => void;
 };
+
+function canUseFrozenFinalPdf(quote: Quote): boolean {
+  return Boolean(quote.pdfSnapshot) && quote.status !== "Draft";
+}
 
 function TotalsBreakdown({
   quote,
@@ -143,6 +150,8 @@ function TotalsBreakdown({
 function StatusActions({
   quote,
   saved,
+  settingsReady = true,
+  settingsUnavailableMessage,
   canRestore = false,
   canOverrideQuoteStatus = false,
   onMarkSent,
@@ -158,6 +167,8 @@ function StatusActions({
   QuoteTotalsPanelProps,
   | "quote"
   | "saved"
+  | "settingsReady"
+  | "settingsUnavailableMessage"
   | "canRestore"
   | "canOverrideQuoteStatus"
   | "onMarkSent"
@@ -174,6 +185,9 @@ function StatusActions({
 
   const status: QuoteStatus = quote.status;
   const archived = quote.archived;
+  const settingsBlockedTitle = !settingsReady
+    ? settingsUnavailableMessage
+    : undefined;
 
   if (archived) {
     return (
@@ -183,7 +197,14 @@ function StatusActions({
             Restore
           </Button>
         ) : null}
-        <Button type="button" variant="secondary" size="sm" onClick={onDuplicate}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onDuplicate}
+          disabled={!settingsReady}
+          title={settingsBlockedTitle}
+        >
           Duplicate
         </Button>
       </div>
@@ -194,14 +215,28 @@ function StatusActions({
     return (
       <div className="flex flex-col gap-2">
         {canOverrideQuoteStatus ? (
-          <Button type="button" variant="primary" size="sm" onClick={onReactivate}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={onReactivate}
+            disabled={!settingsReady}
+            title={settingsBlockedTitle}
+          >
             Reactivate to Draft
           </Button>
         ) : null}
         <Button type="button" variant="secondary" size="sm" onClick={onArchive}>
           Archive
         </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={onDuplicate}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onDuplicate}
+          disabled={!settingsReady}
+          title={settingsBlockedTitle}
+        >
           Duplicate
         </Button>
       </div>
@@ -214,7 +249,14 @@ function StatusActions({
         <Button type="button" variant="secondary" size="sm" onClick={onArchive}>
           Archive
         </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={onDuplicate}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onDuplicate}
+          disabled={!settingsReady}
+          title={settingsBlockedTitle}
+        >
           Duplicate
         </Button>
       </div>
@@ -224,7 +266,14 @@ function StatusActions({
   return (
     <div className="flex flex-col gap-2">
       {status === "Draft" ? (
-        <Button type="button" variant="primary" size="sm" onClick={onMarkSent}>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={onMarkSent}
+          disabled={!settingsReady}
+          title={settingsBlockedTitle}
+        >
           Mark as Sent
         </Button>
       ) : null}
@@ -251,7 +300,14 @@ function StatusActions({
       <Button type="button" variant="secondary" size="sm" onClick={onArchive}>
         Archive
       </Button>
-      <Button type="button" variant="secondary" size="sm" onClick={onDuplicate}>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={onDuplicate}
+        disabled={!settingsReady}
+        title={settingsBlockedTitle}
+      >
         Duplicate
       </Button>
     </div>
@@ -260,14 +316,25 @@ function StatusActions({
 
 function PanelContent(props: QuoteTotalsPanelProps) {
   const {
+    quote,
     editable,
     saving,
     pdfBusy = false,
+    settingsReady = true,
+    settingsUnavailableMessage,
     lastSavedAt,
     onSaveDraft,
     onPreviewPdf,
     onFinalPdf,
   } = props;
+
+  const frozenFinalAvailable = canUseFrozenFinalPdf(quote);
+  const settingsBlockedTitle = !settingsReady
+    ? settingsUnavailableMessage
+    : undefined;
+  const previewDisabled = pdfBusy || !settingsReady;
+  const finalPdfDisabled =
+    pdfBusy || (!settingsReady && !frozenFinalAvailable);
 
   return (
     <div className="space-y-4">
@@ -292,7 +359,8 @@ function PanelContent(props: QuoteTotalsPanelProps) {
           type="button"
           variant="secondary"
           onClick={onPreviewPdf}
-          disabled={pdfBusy}
+          disabled={previewDisabled}
+          title={previewDisabled && !pdfBusy ? settingsBlockedTitle : undefined}
         >
           {pdfBusy ? "Generating…" : "Preview PDF"}
         </Button>
@@ -300,7 +368,10 @@ function PanelContent(props: QuoteTotalsPanelProps) {
           type="button"
           variant="secondary"
           onClick={onFinalPdf}
-          disabled={pdfBusy}
+          disabled={finalPdfDisabled}
+          title={
+            finalPdfDisabled && !pdfBusy ? settingsBlockedTitle : undefined
+          }
         >
           {pdfBusy ? "Generating…" : "Final PDF"}
         </Button>

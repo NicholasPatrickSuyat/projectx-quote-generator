@@ -9,9 +9,20 @@ Professional quote generation for service businesses such as HVAC, plumbing, roo
 | Layer | State |
 |-------|--------|
 | **Demo-complete** | Core Spec §15.4 workflows work end-to-end in this deployment |
-| **Production-ready** | **Not yet** — no durable database; authentication is **DEMO-ONLY** (not production-secure) |
+| **Production-ready** | **Not yet** — authentication is **DEMO-ONLY**; production stays on session persistence until later milestones |
 
 **Production demo:** https://projectx-quote-generator.vercel.app/
+
+### Persistence modes (Milestone 17)
+
+| `PERSISTENCE_MODE` | Behavior |
+|--------------------|----------|
+| `session` (**default**, **production**) | Current demo: Settings, Catalog, Customers, Quotes all in-memory / session |
+| `database` (local / approved preview only) | **Settings + Catalog** durable on Neon; Customers / Quotes / Auth remain demo session |
+
+Production must remain `PERSISTENCE_MODE=session` until production authentication (M18+). Database mode is **development / private-preview only** and is **not** production-secure; demo sign-in is not server authorization. Durable Server Actions refuse `APP_ENV=production` and `VERCEL_ENV=production`. Company logo uploads are capped at **512 KB** decoded so they fit the default Server Action body limit after base64 encoding.
+
+See `.env.example` for `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. Optional scripts: `npm run db:migrate`, `npm run db:bootstrap:company`, `npm run db:seed:demo`.
 
 ## Tech Stack
 
@@ -19,6 +30,7 @@ Professional quote generation for service businesses such as HVAC, plumbing, roo
 - TypeScript
 - Tailwind CSS
 - `@react-pdf/renderer` (quote PDF)
+- Drizzle ORM + Neon (optional local/preview persistence)
 - Git / GitHub / Vercel
 
 ## Getting Started
@@ -39,7 +51,7 @@ Credentials are checked in the browser session only. This is **not** production 
 | Admin | `alex.admin@demo.projectx.local` | `DemoAdmin!23` |
 | Office Staff | `jordan.staff@demo.projectx.local` | `DemoStaff!23` |
 
-Data (customers, quotes, catalog, settings, users) lives in **in-memory session stores** and reseeds on full reload. Only the demo signed-in user id is kept in `sessionStorage`.
+Data (customers, quotes, users) lives in **in-memory session stores** and reseeds on full reload when `PERSISTENCE_MODE=session` (default). Only the demo signed-in user id is kept in `sessionStorage`. In local `database` mode, Company Settings and Service Catalog persist to Neon instead.
 
 ## Documentation
 

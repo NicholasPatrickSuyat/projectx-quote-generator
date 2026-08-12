@@ -1,5 +1,5 @@
 import type { CatalogFormValues, CatalogItem } from "@/types/catalog";
-import type { LineCategory } from "@/types/quote";
+import { LINE_CATEGORIES, type LineCategory } from "@/types/quote";
 
 export type CatalogArchiveFilter = "active" | "archived";
 
@@ -21,8 +21,16 @@ export type CatalogFilters = {
 export type CatalogFieldErrors = {
   name?: string;
   category?: string;
+  unit?: string;
   unitPrice?: string;
+  description?: string;
 };
+
+const CATALOG_NAME_MAX = 200;
+const CATALOG_UNIT_MAX = 40;
+const CATALOG_DESCRIPTION_MAX = 2000;
+/** Matches Postgres integer cents capacity with headroom (~$21M). */
+const CATALOG_UNIT_PRICE_MAX = 21_000_000;
 
 export const DEFAULT_CATALOG_FILTERS: CatalogFilters = {
   query: "",
@@ -118,15 +126,36 @@ export function validateCatalogForm(
   values: CatalogFormValues,
 ): CatalogFieldErrors {
   const errors: CatalogFieldErrors = {};
+  const name = values.name.trim();
+  const unit = values.unit.trim();
+  const description = values.description.trim();
 
-  if (!values.name.trim()) {
+  if (!name) {
     errors.name = "Service name is required.";
+  } else if (name.length > CATALOG_NAME_MAX) {
+    errors.name = `Service name must be ${CATALOG_NAME_MAX} characters or fewer.`;
   }
+
   if (!values.category) {
     errors.category = "Category is required.";
+  } else if (
+    !(LINE_CATEGORIES as readonly string[]).includes(values.category)
+  ) {
+    errors.category = "Category must be Services, Materials, or Labor.";
   }
+
+  if (unit.length > CATALOG_UNIT_MAX) {
+    errors.unit = `Unit must be ${CATALOG_UNIT_MAX} characters or fewer.`;
+  }
+
   if (!Number.isFinite(values.unitPrice) || values.unitPrice < 0) {
     errors.unitPrice = "Default unit price must be zero or greater.";
+  } else if (values.unitPrice > CATALOG_UNIT_PRICE_MAX) {
+    errors.unitPrice = `Default unit price must be ${CATALOG_UNIT_PRICE_MAX.toLocaleString("en-US")} or less.`;
+  }
+
+  if (description.length > CATALOG_DESCRIPTION_MAX) {
+    errors.description = `Description must be ${CATALOG_DESCRIPTION_MAX} characters or fewer.`;
   }
 
   return errors;

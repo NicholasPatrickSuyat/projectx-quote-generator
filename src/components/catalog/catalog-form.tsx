@@ -13,6 +13,7 @@ type CatalogFormProps = {
   onChange: (values: CatalogFormValues) => void;
   onSubmit: () => void;
   formId: string;
+  formError?: string | null;
 };
 
 export function CatalogForm({
@@ -21,6 +22,7 @@ export function CatalogForm({
   onChange,
   onSubmit,
   formId,
+  formError = null,
 }: CatalogFormProps) {
   const update = <K extends keyof CatalogFormValues>(
     key: K,
@@ -39,6 +41,11 @@ export function CatalogForm({
       }}
       noValidate
     >
+      {formError ? (
+        <p className="text-sm text-danger" role="alert">
+          {formError}
+        </p>
+      ) : null}
       <FormField id="name" label="Service Name" required error={errors.name}>
         <Input
           {...fieldControlProps("name", errors.name)}

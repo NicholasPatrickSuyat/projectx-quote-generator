@@ -3,6 +3,7 @@
 import { LogoUploadField } from "@/components/settings/logo-upload-field";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
+import { PersistenceHybridNotice } from "@/components/persistence/persistence-hybrid-notice";
 import { useCompanySettingsSession } from "@/components/session/company-settings-session-provider";
 import { useUnsavedNavigationGuard } from "@/lib/navigation/use-unsaved-navigation-guard";
 import { Button } from "@/components/ui/button";
@@ -68,8 +69,16 @@ function focusSettingsField(field: string) {
 export function SettingsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { ready, settings, canManageSettings, saveSettings } =
-    useCompanySettingsSession();
+  const {
+    ready,
+    bootSettled,
+    settings,
+    canManageSettings,
+    saveSettings,
+    showHybridNotice,
+    lastError,
+    loadFailed,
+  } = useCompanySettingsSession();
 
   const tab = parseSettingsTab(searchParams.get("tab"));
   const [formValues, setFormValues] = useState<CompanySettingsFormValues>(
@@ -201,7 +210,7 @@ export function SettingsView() {
     setValidationMessage(null);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!editable) return;
     const nextErrors = validateCompanySettingsForm(formValues);
     setErrors(nextErrors);
@@ -225,17 +234,24 @@ export function SettingsView() {
       return;
     }
 
-    const saved = saveSettings(formValues);
-    const next = companySettingsToFormValues(saved);
-    setFormValues(next);
-    setBaseline(next);
-    setSyncedKey(saved.updatedAt);
-    setErrors({});
-    setValidationMessage(null);
-    setSaveSuccess(true);
+    try {
+      const saved = await saveSettings(formValues);
+      const next = companySettingsToFormValues(saved);
+      setFormValues(next);
+      setBaseline(next);
+      setSyncedKey(saved.updatedAt);
+      setErrors({});
+      setValidationMessage(null);
+      setSaveSuccess(true);
+    } catch (error) {
+      setSaveSuccess(false);
+      setValidationMessage(
+        error instanceof Error ? error.message : "Could not save settings.",
+      );
+    }
   }
 
-  if (!ready) {
+  if (!bootSettled || (!ready && !loadFailed)) {
     return (
       <PageContainer>
         <PageHeader
@@ -247,12 +263,35 @@ export function SettingsView() {
     );
   }
 
+  if (loadFailed || !ready) {
+    return (
+      <PageContainer>
+        <PageHeader
+          title="Company Settings"
+          description="Company profile, quote defaults, and PDF defaults."
+        />
+        <PersistenceHybridNotice show={showHybridNotice} />
+        <p className="text-sm text-danger" role="alert">
+          {lastError ??
+            "Company Settings could not be loaded from the database. Durable data was not overwritten. Refresh the page after fixing the connection."}
+        </p>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer className="pb-28">
       <PageHeader
         title="Company Settings"
         description="Manage company identity, quote defaults, and PDF defaults. Changes apply to newly created quotes only."
       />
+
+      <PersistenceHybridNotice show={showHybridNotice} />
+      {lastError ? (
+        <p className="mb-4 text-sm text-danger" role="alert">
+          {lastError}
+        </p>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         {dirty ? (

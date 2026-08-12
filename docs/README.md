@@ -11,15 +11,26 @@ Project documentation for Quote Generator Pro.
 | [milestone-13-implementation-plan.md](./milestone-13-implementation-plan.md) | Demo auth + RBAC + Users (**DEMO-ONLY**) |
 | [milestone-14-implementation-plan.md](./milestone-14-implementation-plan.md) | Cross-module hardening & integration |
 | [milestone-15-implementation-plan.md](./milestone-15-implementation-plan.md) | V1 demo readiness & documentation freeze |
+| [milestone-16-implementation-plan.md](./milestone-16-implementation-plan.md) | Production architecture planning (closed) |
+| [milestone-17-implementation-plan.md](./milestone-17-implementation-plan.md) | Production persistence foundation (Settings + Catalog) |
 
 ## Status
 
 | Layer | Meaning |
 |-------|---------|
-| **Demo-complete** | Spec §15.4 office workflows are implemented on the current **in-memory / session** architecture and deployed for demos |
-| **Production-ready** | **Not yet** — durable database and production authentication are deferred |
+| **Demo-complete** | Spec §15.4 office workflows are implemented on the current **session** architecture and deployed for demos |
+| **Production-ready** | **Not yet** — DEMO-ONLY auth; production uses `PERSISTENCE_MODE=session`. Optional local/preview `database` mode can persist Settings + Catalog only |
 
 Authentication in the running app is **DEMO-ONLY** (browser session credential check). It is **not** production-secure.
+
+### Hybrid persistence (M17)
+
+When `PERSISTENCE_MODE=database` (non-production only):
+
+- **Durable:** Company Settings, Service Catalog  
+- **Session/demo:** Auth, Users, Customers, Quotes, Dashboard quote state, PDF snapshots  
+
+Production remains session-only until later milestones.
 
 ## Completed milestones (implementation)
 
@@ -34,12 +45,14 @@ Authentication in the running app is **DEMO-ONLY** (browser session credential c
 - Milestone 12 — PDF Preview / Final / frozen snapshots  
 - Milestone 13 — Demo authentication + RBAC + Users  
 - Milestone 14 — Cross-module hardening (live Dashboard, Sent-only auto-expire, dirty nav, provider RBAC)  
-- Milestone 15 — Demo readiness & documentation freeze (**implemented in working tree; awaiting commit approval**)
+- Milestone 15 — Demo readiness & documentation freeze  
+- Milestone 16 — Production architecture planning  
+- Milestone 17 — Persistence foundation (Settings + Catalog; production stays session) — **in progress / awaiting commit**
 
 ## Explicitly deferred
 
-- Database / durable persistence  
-- Production authentication + server-side authorization  
+- Production authentication + server-side authorization (M18)  
+- Customers / Quotes / PDF snapshot durability (M19)  
 - Email / SMS / re-send  
 - Dedicated Archive page (list filters suffice for V1 demo)  
 - Global search / notifications product  

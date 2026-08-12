@@ -15,6 +15,8 @@ type QuoteSummaryProps = {
   onGeneratePdf: () => void;
   generatePdfLabel?: string;
   generatePdfBusy?: boolean;
+  generatePdfDisabled?: boolean;
+  duplicateDisabled?: boolean;
   onEdit: () => void;
 };
 
@@ -36,6 +38,8 @@ export function QuoteSummary({
   onGeneratePdf,
   generatePdfLabel = "Generate PDF",
   generatePdfBusy = false,
+  generatePdfDisabled = false,
+  duplicateDisabled = false,
   onEdit,
 }: QuoteSummaryProps) {
   const snap = quote.customerSnapshot;
@@ -171,6 +175,7 @@ export function QuoteSummary({
           type="button"
           className={buttonClassName({ variant: "secondary", size: "sm" })}
           onClick={onDuplicate}
+          disabled={duplicateDisabled}
         >
           Duplicate
         </button>
@@ -178,7 +183,7 @@ export function QuoteSummary({
           type="button"
           className={buttonClassName({ variant: "secondary", size: "sm" })}
           onClick={onGeneratePdf}
-          disabled={generatePdfBusy}
+          disabled={generatePdfBusy || generatePdfDisabled}
         >
           {generatePdfBusy ? "Generating…" : generatePdfLabel}
         </button>
