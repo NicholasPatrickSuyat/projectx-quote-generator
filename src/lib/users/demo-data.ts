@@ -43,7 +43,7 @@ export function emptyUserForm(): UserFormValues {
     email: "",
     role: "Office Staff",
     active: true,
-    demoPassword: "",
+    password: "",
   };
 }
 
@@ -53,7 +53,7 @@ export function userToFormValues(user: User): UserFormValues {
     email: user.email,
     role: user.role,
     active: user.active,
-    demoPassword: "",
+    password: "",
   };
 }
 

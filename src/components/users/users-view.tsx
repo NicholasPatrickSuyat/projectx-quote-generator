@@ -52,7 +52,7 @@ function formsEqual(a: UserFormValues, b: UserFormValues): boolean {
     a.email === b.email &&
     a.role === b.role &&
     a.active === b.active &&
-    a.demoPassword === b.demoPassword
+    a.password === b.password
   );
 }
 
@@ -61,6 +61,7 @@ export function UsersView() {
     ready,
     users,
     currentUser,
+    authMode,
     createUserAccount,
     updateUserAccount,
     setUserActiveState,
@@ -121,11 +122,11 @@ export function UsersView() {
     setActionError(null);
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setActionError(null);
     if (panelMode === "create") {
-      const result = createUserAccount(formValues);
+      const result = await createUserAccount(formValues);
       if (result.errors && Object.keys(result.errors).length > 0) {
         setErrors(result.errors);
         return;
@@ -137,7 +138,7 @@ export function UsersView() {
       return;
     }
     if (panelMode === "edit" && selectedId) {
-      const result = updateUserAccount(selectedId, formValues);
+      const result = await updateUserAccount(selectedId, formValues);
       if (result.errors && Object.keys(result.errors).length > 0) {
         setErrors(result.errors);
         return;
@@ -278,7 +279,11 @@ export function UsersView() {
     <PageContainer>
       <PageHeader
         title="Users"
-        description="Manage demo user accounts and roles. Demo authentication only."
+        description={
+          authMode === "demo"
+            ? "Manage demo user accounts and roles. Demo authentication only."
+            : "Manage employee accounts, roles, and passwords."
+        }
         actions={
           <Button type="button" variant="primary" onClick={openCreate}>
             + New User
@@ -286,10 +291,17 @@ export function UsersView() {
         }
       />
 
-      <p className="rounded-[var(--radius-md)] border border-border-default bg-bg-muted/50 px-3 py-2 text-xs text-text-secondary">
-        Demo-only credentials are stored in this browser session. This is not
-        production security.
-      </p>
+      {authMode === "demo" ? (
+        <p className="rounded-[var(--radius-md)] border border-border-default bg-bg-muted/50 px-3 py-2 text-xs text-text-secondary">
+          Demo-only credentials are stored in this browser session. This is not
+          production security.
+        </p>
+      ) : (
+        <p className="rounded-[var(--radius-md)] border border-border-default bg-bg-muted/50 px-3 py-2 text-xs text-text-secondary">
+          Passwords are hashed on the server. Admins set and reset employee
+          passwords; email reset is not available in this release.
+        </p>
+      )}
 
       {actionError ? (
         <p className="text-sm text-danger" role="alert">
@@ -418,7 +430,9 @@ export function UsersView() {
         title={panelMode === "create" ? "New User" : "Edit User"}
         description={
           panelMode === "create"
-            ? "Create a demo account. Credentials are session-only."
+            ? authMode === "demo"
+              ? "Create a demo account. Credentials are session-only."
+              : "Create an employee account with an initial password."
             : selectedUser
               ? `${selectedUser.email} · Created ${formatShortDate(selectedUser.createdAt)}`
               : undefined
@@ -508,24 +522,24 @@ export function UsersView() {
             </Select>
           </FormField>
           <FormField
-            id="user-demo-password"
+            id="user-password"
             label={
               panelMode === "create"
-                ? "Demo password"
-                : "Demo password (leave blank to keep)"
+                ? "Password"
+                : "New password (leave blank to keep)"
             }
             required={panelMode === "create"}
-            error={errors.demoPassword}
+            error={errors.password}
           >
             <Input
-              {...fieldControlProps("user-demo-password", errors.demoPassword)}
+              {...fieldControlProps("user-password", errors.password)}
               type="password"
               autoComplete="new-password"
-              value={formValues.demoPassword}
+              value={formValues.password}
               onChange={(event) =>
                 setFormValues((prev) => ({
                   ...prev,
-                  demoPassword: event.target.value,
+                  password: event.target.value,
                 }))
               }
             />
@@ -573,32 +587,40 @@ export function UsersView() {
           setActionError(null);
         }}
         onConfirm={() => {
-          if (confirm?.type !== "deactivate") return;
-          setActionError(null);
-          const message = setUserActiveState(confirm.user.id, false);
-          setConfirm(null);
-          if (message) {
-            setActionError(message);
-          }
+          void (async () => {
+            if (confirm?.type !== "deactivate") return;
+            setActionError(null);
+            const message = await setUserActiveState(confirm.user.id, false);
+            setConfirm(null);
+            if (message) {
+              setActionError(message);
+            }
+          })();
         }}
       />
       <ConfirmDialog
         open={confirm?.type === "activate"}
         title="Activate user?"
-        description="This user will be able to sign in again with their demo credentials."
+        description={
+          authMode === "demo"
+            ? "This user will be able to sign in again with their demo credentials."
+            : "This user will be able to sign in again with their password."
+        }
         confirmLabel="Activate"
         onCancel={() => {
           setConfirm(null);
           setActionError(null);
         }}
         onConfirm={() => {
-          if (confirm?.type !== "activate") return;
-          setActionError(null);
-          const message = setUserActiveState(confirm.user.id, true);
-          setConfirm(null);
-          if (message) {
-            setActionError(message);
-          }
+          void (async () => {
+            if (confirm?.type !== "activate") return;
+            setActionError(null);
+            const message = await setUserActiveState(confirm.user.id, true);
+            setConfirm(null);
+            if (message) {
+              setActionError(message);
+            }
+          })();
         }}
       />
 

@@ -1,26 +1,34 @@
 /**
- * M17 authorization boundary for durable mutations.
+ * M18 authorization boundary for durable Settings/Catalog/Users access.
  *
- * ACCEPTED DEFERRED TO M18: real Auth.js session + capability checks.
- * M17 does NOT implement forgeable demo-auth cookies or pretend demo login
- * is server security.
+ * AUTH_MODE=production: Auth.js session + DB re-check + capabilitiesForRole.
+ * AUTH_MODE=demo: durable DB writes refused; hybrid DB reads remain demo-local.
  *
- * M17 safety boundary (already enforced by assertDatabaseMutationsAllowed):
- * - PERSISTENCE_MODE=database required
- * - DATABASE_URL required (no silent session fallback)
- * - refused when APP_ENV=production or VERCEL_ENV=production
- *
- * Database mode is development / private-preview only until M18.
+ * Never trust client-submitted role, user id, or capability flags.
  */
 
-import { assertDatabaseMutationsAllowed } from "@/lib/persistence/mode";
+import {
+  requireDatabaseCatalogRead,
+  requireDatabaseMutationCapability,
+  requireDatabaseSettingsRead,
+} from "@/lib/auth/session";
 
-export function assertCanManageSettingsForDatabaseMutation(): void {
-  assertDatabaseMutationsAllowed();
-  // M18: resolve server session → capabilities.canManageSettings
+export async function assertCanReadSettingsFromDatabase(): Promise<void> {
+  await requireDatabaseSettingsRead();
 }
 
-export function assertCanManageCatalogForDatabaseMutation(): void {
-  assertDatabaseMutationsAllowed();
-  // M18: resolve server session → capabilities.canManageCatalog
+export async function assertCanReadCatalogFromDatabase(): Promise<void> {
+  await requireDatabaseCatalogRead();
+}
+
+export async function assertCanManageSettingsForDatabaseMutation(): Promise<void> {
+  await requireDatabaseMutationCapability("canManageSettings");
+}
+
+export async function assertCanManageCatalogForDatabaseMutation(): Promise<void> {
+  await requireDatabaseMutationCapability("canManageCatalog");
+}
+
+export async function assertCanManageUsersForDatabaseMutation(): Promise<void> {
+  await requireDatabaseMutationCapability("canManageUsers");
 }

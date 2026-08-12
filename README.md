@@ -9,20 +9,33 @@ Professional quote generation for service businesses such as HVAC, plumbing, roo
 | Layer | State |
 |-------|--------|
 | **Demo-complete** | Core Spec §15.4 workflows work end-to-end in this deployment |
-| **Production-ready** | **Not yet** — authentication is **DEMO-ONLY**; production stays on session persistence until later milestones |
+| **Production-ready** | **Not yet** — public production remains `AUTH_MODE=demo` + `PERSISTENCE_MODE=session` until deliberate cutover |
 
 **Production demo:** https://projectx-quote-generator.vercel.app/
 
-### Persistence modes (Milestone 17)
+### Auth modes (Milestone 18)
+
+| `AUTH_MODE` | Behavior |
+|-------------|----------|
+| `demo` (**default**, **public production until cutover**) | M13 DEMO-ONLY login; cannot authorize durable database writes |
+| `production` | Auth.js Credentials + `app_users`; real server authorization; requires `AUTH_SECRET` + `PERSISTENCE_MODE=database` |
+
+Invalid `AUTH_MODE` / production without `AUTH_SECRET` fails fast (no silent weaker fallback).
+
+### Persistence modes (Milestone 17+)
 
 | `PERSISTENCE_MODE` | Behavior |
 |--------------------|----------|
-| `session` (**default**, **production**) | Current demo: Settings, Catalog, Customers, Quotes all in-memory / session |
-| `database` (local / approved preview only) | **Settings + Catalog** durable on Neon; Customers / Quotes / Auth remain demo session |
+| `session` (**default**, **public production until cutover**) | Settings, Catalog, Customers, Quotes in-memory / session |
+| `database` | **Settings + Catalog** (+ Users when `AUTH_MODE=production`) on Neon; Customers / Quotes remain session until M19 |
 
-Production must remain `PERSISTENCE_MODE=session` until production authentication (M18+). Database mode is **development / private-preview only** and is **not** production-secure; demo sign-in is not server authorization. Durable Server Actions refuse `APP_ENV=production` and `VERCEL_ENV=production`. Company logo uploads are capped at **512 KB** decoded so they fit the default Server Action body limit after base64 encoding.
+`AUTH_MODE=demo` + `PERSISTENCE_MODE=database` is **local `APP_ENV=development` only** and is refused on preview/production-like hosts.
 
-See `.env.example` for `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. Optional scripts: `npm run db:migrate`, `npm run db:bootstrap:company`, `npm run db:seed:demo`.
+Public production must remain `AUTH_MODE=demo` + `PERSISTENCE_MODE=session` until cutover is separately approved. Demo auth cannot authorize durable database mutations. Company logo uploads are capped at **512 KB** decoded so they fit the default Server Action body limit after base64 encoding.
+
+**LOGIN RATE LIMITING = PRODUCTION CUTOVER BLOCKER** (not implemented in M18). Do not present the app as fully production-ready until a serverless-safe rate-limit strategy ships (M20).
+
+See `.env.example` for env names only. Scripts: `npm run db:migrate`, `npm run db:bootstrap:company`, `npm run db:bootstrap:admin`, `npm run db:seed:demo`.
 
 ## Tech Stack
 
@@ -30,7 +43,8 @@ See `.env.example` for `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. Optional script
 - TypeScript
 - Tailwind CSS
 - `@react-pdf/renderer` (quote PDF)
-- Drizzle ORM + Neon (optional local/preview persistence)
+- Auth.js (`next-auth`) + bcryptjs + Zod (production auth)
+- Drizzle ORM + Neon (optional / cutover persistence)
 - Git / GitHub / Vercel
 
 ## Getting Started
@@ -42,7 +56,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### Demo authentication (DEMO-ONLY)
+### Demo authentication (DEMO-ONLY — `AUTH_MODE=demo`)
 
 Credentials are checked in the browser session only. This is **not** production security.
 
@@ -51,8 +65,14 @@ Credentials are checked in the browser session only. This is **not** production 
 | Admin | `alex.admin@demo.projectx.local` | `DemoAdmin!23` |
 | Office Staff | `jordan.staff@demo.projectx.local` | `DemoStaff!23` |
 
-Data (customers, quotes, users) lives in **in-memory session stores** and reseeds on full reload when `PERSISTENCE_MODE=session` (default). Only the demo signed-in user id is kept in `sessionStorage`. In local `database` mode, Company Settings and Service Catalog persist to Neon instead.
+Data (customers, quotes, users) lives in **in-memory session stores** and reseeds on full reload when `PERSISTENCE_MODE=session` (default). Only the demo signed-in user id is kept in `sessionStorage`. In local `database` mode with `AUTH_MODE=demo`, Company Settings and Service Catalog can load from Neon, but durable writes are refused until `AUTH_MODE=production`.
 
+### Production authentication (local / non-production cutover testing)
+
+1. Set `AUTH_MODE=production`, `PERSISTENCE_MODE=database`, `AUTH_SECRET`, `DATABASE_URL`, `DATABASE_URL_UNPOOLED`
+2. `npm run db:migrate` (uses unpooled URL)
+3. `npm run db:bootstrap:company`
+4. `npm run db:bootstrap:admin` (password via prompt or temporary `BOOTSTRAP_ADMIN_PASSWORD` — never commit)
 ## Documentation
 
 | Document | Description |
@@ -83,13 +103,13 @@ Data (customers, quotes, users) lives in **in-memory session stores** and reseed
 - [x] Demo authentication + RBAC + User Management (**DEMO-ONLY**)
 - [x] Cross-module hardening (auto-expire Sent-only, dirty nav, provider RBAC)
 - [ ] Demo readiness polish (docs freeze, customer aggregates, Search stub removal) — Milestone 15 (implemented locally; awaiting commit approval)
+- [x] Durable Settings/Catalog persistence (M17) + production auth/server authorization (M18) — cutover not enabled on public production
 
-### Later (production-ready path — not started)
+### Later (production-ready path)
 
-- [ ] Durable database / persistence
-- [ ] Production authentication + server-side authorization
+- [ ] Production auth/database **cutover** on public Vercel (separate approval)
+- [ ] Customers / Quotes database persistence (M19+)
 - [ ] Email / SMS delivery (explicitly out of current demo scope)
-
 ## Sellable demo smoke checklist
 
 **Admin**

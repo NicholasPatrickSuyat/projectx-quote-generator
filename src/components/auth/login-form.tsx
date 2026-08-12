@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { FormField, fieldControlProps } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
+import { useAuthSession } from "@/components/session/auth-session-context";
 import {
   DEMO_ADMIN_EMAIL,
   DEMO_STAFF_EMAIL,
@@ -14,11 +14,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 /**
- * DEMO-ONLY login form. Credentials are checked in the browser session.
- * Do not present this as production authentication.
+ * Login form — demo (client credential map) or production (Auth.js Credentials).
  */
 export function LoginForm() {
-  const { ready, currentUser, signIn } = useDemoAuthSession();
+  const { ready, currentUser, signIn, authMode } = useAuthSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const safeNext = useMemo(
@@ -45,11 +44,11 @@ export function LoginForm() {
     );
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
-    const message = signIn(email, password);
+    const message = await signIn(email, password);
     setSubmitting(false);
     if (message) {
       setError(message);
@@ -77,10 +76,16 @@ export function LoginForm() {
         className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-6 shadow-sm"
         noValidate
       >
-        <p className="mb-4 rounded-[var(--radius-md)] border border-border-default bg-bg-muted/60 px-3 py-2 text-xs text-text-secondary">
-          Demo authentication only — not production security. Credentials are
-          checked in this browser session.
-        </p>
+        {authMode === "demo" ? (
+          <p className="mb-4 rounded-[var(--radius-md)] border border-border-default bg-bg-muted/60 px-3 py-2 text-xs text-text-secondary">
+            Demo authentication only — not production security. Credentials are
+            checked in this browser session.
+          </p>
+        ) : (
+          <p className="mb-4 rounded-[var(--radius-md)] border border-border-default bg-bg-muted/60 px-3 py-2 text-xs text-text-secondary">
+            Sign in with your organization account.
+          </p>
+        )}
 
         <div className="space-y-4">
           <FormField id="login-email" label="Email" required>
@@ -119,17 +124,19 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <div className="mt-6 rounded-[var(--radius-md)] border border-dashed border-border-default bg-bg-surface/80 px-4 py-3 text-xs text-text-secondary">
-        <p className="font-medium text-text-primary">Demo accounts</p>
-        <ul className="mt-2 space-y-1">
-          <li>
-            Admin: {DEMO_ADMIN_EMAIL} / DemoAdmin!23
-          </li>
-          <li>
-            Office Staff: {DEMO_STAFF_EMAIL} / DemoStaff!23
-          </li>
-        </ul>
-      </div>
+      {authMode === "demo" ? (
+        <div className="mt-6 rounded-[var(--radius-md)] border border-dashed border-border-default bg-bg-surface/80 px-4 py-3 text-xs text-text-secondary">
+          <p className="font-medium text-text-primary">Demo accounts</p>
+          <ul className="mt-2 space-y-1">
+            <li>
+              Admin: {DEMO_ADMIN_EMAIL} / DemoAdmin!23
+            </li>
+            <li>
+              Office Staff: {DEMO_STAFF_EMAIL} / DemoStaff!23
+            </li>
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

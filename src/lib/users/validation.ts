@@ -1,11 +1,12 @@
 import { normalizeEmail } from "@/lib/auth/demo-auth";
+import { PASSWORD_MIN_LENGTH } from "@/lib/auth/password";
 import type { User, UserFormValues, UserRole } from "@/types/user";
 
 export type UserFieldErrors = {
   fullName?: string;
   email?: string;
   role?: string;
-  demoPassword?: string;
+  password?: string;
   form?: string;
 };
 
@@ -75,9 +76,17 @@ export function validateUserForm(
     errors.role = "Role is required.";
   }
 
-  if (options.mode === "create" && !values.demoPassword.trim()) {
-    errors.demoPassword =
-      "A demo password is required for new users (demo auth only).";
+  if (options.mode === "create") {
+    if (!values.password.trim()) {
+      errors.password = "Password is required for new users.";
+    } else if (values.password.length < PASSWORD_MIN_LENGTH) {
+      errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
+    }
+  } else if (
+    values.password.trim().length > 0 &&
+    values.password.length < PASSWORD_MIN_LENGTH
+  ) {
+    errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
   }
 
   if (options.mode === "edit" && options.userId) {

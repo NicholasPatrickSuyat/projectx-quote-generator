@@ -4,14 +4,16 @@
  * DEMO-ONLY authentication + user directory session.
  *
  * See `src/lib/auth/demo-auth.ts` for the security boundary.
- * Replace this provider with a real auth session later; keep
- * `capabilities` and feature UI gates stable.
+ * Used only when AUTH_MODE=demo.
  */
 
 import {
+  AuthSessionContextProvider,
+  type AuthSessionContextValue,
+} from "@/components/session/auth-session-context";
+import {
   EMPTY_CAPABILITIES,
   capabilitiesForRole,
-  type RoleCapabilities,
 } from "@/lib/auth/capabilities";
 import {
   normalizeEmail,
@@ -31,45 +33,16 @@ import {
 import { startOfDay } from "@/lib/format";
 import type { User, UserFormValues } from "@/types/user";
 import {
-  createContext,
-  useContext,
   useMemo,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
 
-type DemoAuthSessionContextValue = {
-  /** False until client has hydrated demo auth from sessionStorage. */
-  ready: boolean;
-  currentUser: User | null;
-  users: User[];
-  capabilities: RoleCapabilities;
-  /**
-   * DEMO-ONLY sign-in. Returns an error message on failure.
-   * Never treat success as proof of production-grade security.
-   */
-  signIn: (email: string, password: string) => string | null;
-  signOut: () => void;
-  getUser: (id: string) => User | undefined;
-  createUserAccount: (
-    values: UserFormValues,
-  ) => { user: User | null; errors: UserFieldErrors };
-  updateUserAccount: (
-    id: string,
-    values: UserFormValues,
-  ) => { user: User | null; errors: UserFieldErrors };
-  setUserActiveState: (id: string, active: boolean) => string | null;
-};
-
-const DemoAuthSessionContext =
-  createContext<DemoAuthSessionContextValue | null>(null);
-
 function subscribeToNothing() {
   return () => {};
 }
 
-/** True only after client hydration — keeps SSR and first paint aligned. */
 function useClientMounted(): boolean {
   return useSyncExternalStore(
     subscribeToNothing,
@@ -107,7 +80,7 @@ export function DemoAuthSessionProvider({
     }
   }
 
-  const value = useMemo<DemoAuthSessionContextValue>(() => {
+  const value = useMemo<AuthSessionContextValue>(() => {
     const currentUser =
       currentUserId == null
         ? null
@@ -122,7 +95,7 @@ export function DemoAuthSessionProvider({
       return users.find((user) => user.id === id);
     }
 
-    function signIn(email: string, password: string): string | null {
+    async function signIn(email: string, password: string): Promise<string | null> {
       const key = normalizeEmail(email);
       const user = users.find((item) => normalizeEmail(item.email) === key);
       if (!user) {
@@ -140,15 +113,15 @@ export function DemoAuthSessionProvider({
       return null;
     }
 
-    function signOut() {
+    async function signOut() {
       setCurrentUserId(null);
       writeDemoAuthUserId(null);
     }
 
-    function createUserAccount(values: UserFormValues): {
+    async function createUserAccount(values: UserFormValues): Promise<{
       user: User | null;
       errors: UserFieldErrors;
-    } {
+    }> {
       if (!capabilities.canManageUsers) {
         return {
           user: null,
@@ -165,15 +138,15 @@ export function DemoAuthSessionProvider({
       setUsers((prev) => [created, ...prev]);
       setCredentials((prev) => ({
         ...prev,
-        [key]: values.demoPassword,
+        [key]: values.password,
       }));
       return { user: created, errors: {} };
     }
 
-    function updateUserAccount(
+    async function updateUserAccount(
       id: string,
       values: UserFormValues,
-    ): { user: User | null; errors: UserFieldErrors } {
+    ): Promise<{ user: User | null; errors: UserFieldErrors }> {
       if (!capabilities.canManageUsers) {
         return {
           user: null,
@@ -203,8 +176,8 @@ export function DemoAuthSessionProvider({
       setCredentials((prev) => {
         const next = { ...prev };
         const password =
-          values.demoPassword.trim().length > 0
-            ? values.demoPassword
+          values.password.trim().length > 0
+            ? values.password
             : next[previousKey];
         if (previousKey !== nextKey) {
           delete next[previousKey];
@@ -216,13 +189,16 @@ export function DemoAuthSessionProvider({
       });
 
       if (currentUserId === id && !updated.active) {
-        signOut();
+        await signOut();
       }
 
       return { user: updated, errors: {} };
     }
 
-    function setUserActiveState(id: string, active: boolean): string | null {
+    async function setUserActiveState(
+      id: string,
+      active: boolean,
+    ): Promise<string | null> {
       if (!capabilities.canManageUsers) {
         return "You do not have permission to manage users.";
       }
@@ -241,13 +217,14 @@ export function DemoAuthSessionProvider({
       if (result.error) return result.error;
       setUsers(result.users);
       if (currentUserId === id && !active) {
-        signOut();
+        await signOut();
       }
       return null;
     }
 
     return {
       ready: seeded,
+      authMode: "demo",
       currentUser,
       users,
       capabilities,
@@ -261,18 +238,13 @@ export function DemoAuthSessionProvider({
   }, [users, credentials, currentUserId, seeded]);
 
   return (
-    <DemoAuthSessionContext.Provider value={value}>
+    <AuthSessionContextProvider value={value}>
       {children}
-    </DemoAuthSessionContext.Provider>
+    </AuthSessionContextProvider>
   );
 }
 
-export function useDemoAuthSession(): DemoAuthSessionContextValue {
-  const ctx = useContext(DemoAuthSessionContext);
-  if (!ctx) {
-    throw new Error(
-      "useDemoAuthSession must be used within DemoAuthSessionProvider",
-    );
-  }
-  return ctx;
-}
+export {
+  useAuthSession,
+  useDemoAuthSession,
+} from "@/components/session/auth-session-context";

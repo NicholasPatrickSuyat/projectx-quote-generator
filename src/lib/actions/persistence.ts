@@ -3,13 +3,12 @@
 import {
   assertCanManageCatalogForDatabaseMutation,
   assertCanManageSettingsForDatabaseMutation,
+  assertCanReadCatalogFromDatabase,
+  assertCanReadSettingsFromDatabase,
 } from "@/lib/auth/assert-capability";
 import { createDbCatalogRepository } from "@/lib/persistence/db-catalog-repository";
 import { createDbCompanySettingsRepository } from "@/lib/persistence/db-company-settings-repository";
-import {
-  getPersistenceMode,
-  assertDatabaseAccessAllowed,
-} from "@/lib/persistence/mode";
+import { getPersistenceMode } from "@/lib/persistence/mode";
 import type { CatalogFormValues, CatalogItem } from "@/types/catalog";
 import type {
   CompanySettings,
@@ -21,6 +20,10 @@ export type PersistencePublicInfo = {
   showHybridNotice: boolean;
 };
 
+/**
+ * Non-sensitive mode metadata for UX notices.
+ * Does not expose durable application data — intentionally unauthenticated.
+ */
 export async function getPersistencePublicInfo(): Promise<PersistencePublicInfo> {
   const mode = getPersistenceMode();
   return {
@@ -30,26 +33,26 @@ export async function getPersistencePublicInfo(): Promise<PersistencePublicInfo>
 }
 
 export async function loadCompanySettingsFromDb(): Promise<CompanySettings> {
-  assertDatabaseAccessAllowed();
+  await assertCanReadSettingsFromDatabase();
   return createDbCompanySettingsRepository().get();
 }
 
 export async function saveCompanySettingsToDb(
   values: CompanySettingsFormValues,
 ): Promise<CompanySettings> {
-  assertCanManageSettingsForDatabaseMutation();
+  await assertCanManageSettingsForDatabaseMutation();
   return createDbCompanySettingsRepository().save(values);
 }
 
 export async function loadCatalogFromDb(): Promise<CatalogItem[]> {
-  assertDatabaseAccessAllowed();
+  await assertCanReadCatalogFromDatabase();
   return createDbCatalogRepository().list();
 }
 
 export async function createCatalogItemInDb(
   values: CatalogFormValues,
 ): Promise<CatalogItem> {
-  assertCanManageCatalogForDatabaseMutation();
+  await assertCanManageCatalogForDatabaseMutation();
   return createDbCatalogRepository().create(values);
 }
 
@@ -57,23 +60,23 @@ export async function updateCatalogItemInDb(
   id: string,
   values: CatalogFormValues,
 ): Promise<CatalogItem | null> {
-  assertCanManageCatalogForDatabaseMutation();
+  await assertCanManageCatalogForDatabaseMutation();
   return createDbCatalogRepository().update(id, values);
 }
 
 export async function duplicateCatalogItemInDb(
   id: string,
 ): Promise<CatalogItem | null> {
-  assertCanManageCatalogForDatabaseMutation();
+  await assertCanManageCatalogForDatabaseMutation();
   return createDbCatalogRepository().duplicate(id);
 }
 
 export async function archiveCatalogItemInDb(id: string): Promise<void> {
-  assertCanManageCatalogForDatabaseMutation();
+  await assertCanManageCatalogForDatabaseMutation();
   return createDbCatalogRepository().archive(id);
 }
 
 export async function restoreCatalogItemInDb(id: string): Promise<void> {
-  assertCanManageCatalogForDatabaseMutation();
+  await assertCanManageCatalogForDatabaseMutation();
   return createDbCatalogRepository().restore(id);
 }

@@ -13,24 +13,27 @@ Project documentation for Quote Generator Pro.
 | [milestone-15-implementation-plan.md](./milestone-15-implementation-plan.md) | V1 demo readiness & documentation freeze |
 | [milestone-16-implementation-plan.md](./milestone-16-implementation-plan.md) | Production architecture planning (closed) |
 | [milestone-17-implementation-plan.md](./milestone-17-implementation-plan.md) | Production persistence foundation (Settings + Catalog) |
+| [milestone-18-implementation-plan.md](./milestone-18-implementation-plan.md) | Production authentication + server authorization |
+| [milestone-18-authorization-matrix.md](./milestone-18-authorization-matrix.md) | Production server authorization matrix + session revocation |
 
 ## Status
 
 | Layer | Meaning |
 |-------|---------|
 | **Demo-complete** | Spec §15.4 office workflows are implemented on the current **session** architecture and deployed for demos |
-| **Production-ready** | **Not yet** — DEMO-ONLY auth; production uses `PERSISTENCE_MODE=session`. Optional local/preview `database` mode can persist Settings + Catalog only |
+| **Production-ready** | **Not yet** — public production remains `AUTH_MODE=demo` + `PERSISTENCE_MODE=session` until deliberate cutover |
 
-Authentication in the running app is **DEMO-ONLY** (browser session credential check). It is **not** production-secure.
+Default authentication is **DEMO-ONLY** (`AUTH_MODE=demo`). Production Auth.js + `app_users` is available when `AUTH_MODE=production` (local/non-production cutover testing only until separately approved).
 
-### Hybrid persistence (M17)
+### Auth + persistence cutover (M17/M18)
 
-When `PERSISTENCE_MODE=database` (non-production only):
+| Mode combo | Behavior |
+|------------|----------|
+| `AUTH_MODE=demo` + `PERSISTENCE_MODE=session` | Public demo (default) |
+| `AUTH_MODE=demo` + `PERSISTENCE_MODE=database` | **Local `APP_ENV=development` only** — refused on preview/production hosts |
+| `AUTH_MODE=production` + `PERSISTENCE_MODE=database` | Auth.js + DB users; capability-gated Settings/Catalog/Users |
 
-- **Durable:** Company Settings, Service Catalog  
-- **Session/demo:** Auth, Users, Customers, Quotes, Dashboard quote state, PDF snapshots  
-
-Production remains session-only until later milestones.
+Customers / Quotes remain session until M19.
 
 ## Completed milestones (implementation)
 
@@ -47,11 +50,12 @@ Production remains session-only until later milestones.
 - Milestone 14 — Cross-module hardening (live Dashboard, Sent-only auto-expire, dirty nav, provider RBAC)  
 - Milestone 15 — Demo readiness & documentation freeze  
 - Milestone 16 — Production architecture planning  
-- Milestone 17 — Persistence foundation (Settings + Catalog; production stays session) — **in progress / awaiting commit**
+- Milestone 17 — Persistence foundation (Settings + Catalog; production stays session)  
+- Milestone 18 — Production auth + server authorization — **implemented locally; awaiting approval** (no public cutover)
 
 ## Explicitly deferred
 
-- Production authentication + server-side authorization (M18)  
+- Public production auth/database **cutover** (separate approval; do not flip Vercel env yet)  
 - Customers / Quotes / PDF snapshot durability (M19)  
 - Email / SMS / re-send  
 - Dedicated Archive page (list filters suffice for V1 demo)  

@@ -11,3 +11,5 @@ export const discountTypeEnum = pgEnum("discount_type", [
   "percent",
   "fixed",
 ]);
+
+export const userRoleEnum = pgEnum("user_role", ["Admin", "Office Staff"]);

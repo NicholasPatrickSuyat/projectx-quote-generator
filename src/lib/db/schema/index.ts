@@ -4,4 +4,9 @@ export {
   type LogoJson,
 } from "./company";
 export { catalogItems } from "./catalog";
-export { catalogCategoryEnum, discountTypeEnum } from "./enums";
+export { appUsers } from "./users";
+export {
+  catalogCategoryEnum,
+  discountTypeEnum,
+  userRoleEnum,
+} from "./enums";

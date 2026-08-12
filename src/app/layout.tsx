@@ -1,4 +1,5 @@
-import { DemoAuthSessionProvider } from "@/components/session/demo-auth-session-provider";
+import { AuthRootProvider } from "@/components/session/auth-root-provider";
+import { getAuthMode } from "@/lib/auth/mode";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -23,10 +24,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const authMode = getAuthMode();
+
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full font-sans">
-        <DemoAuthSessionProvider>{children}</DemoAuthSessionProvider>
+        <AuthRootProvider mode={authMode}>{children}</AuthRootProvider>
       </body>
     </html>
   );

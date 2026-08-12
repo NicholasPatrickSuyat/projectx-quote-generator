@@ -36,8 +36,10 @@ export function TopBar({ onMenuClick }: TopBarProps) {
 
   function performSignOut() {
     setConfirmSignOut(false);
-    signOut();
-    router.replace("/login");
+    void (async () => {
+      await signOut();
+      router.replace("/login");
+    })();
   }
 
   function handleSignOut() {

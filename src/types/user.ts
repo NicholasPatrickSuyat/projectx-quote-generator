@@ -32,10 +32,11 @@ export type UserFormValues = {
   role: UserRole;
   active: boolean;
   /**
-   * DEMO-ONLY plaintext password for the session credential map.
-   * Never treat as production-safe. Empty on edit means "keep existing".
+   * Create: required. Edit: empty means keep existing.
+   * Demo mode stores plaintext in the session credential map (DEMO-ONLY).
+   * Production mode hashes via bcryptjs on the server — never sent back to clients.
    */
-  demoPassword: string;
+  password: string;
 };
 
 export function userInitials(fullName: string): string {
