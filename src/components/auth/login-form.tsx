@@ -57,6 +57,8 @@ export function LoginForm() {
     router.replace(safeNext);
   }
 
+  const isDemo = authMode === "demo";
+
   return (
     <div className="mx-auto w-full max-w-md">
       <div className="mb-8 text-center">
@@ -66,9 +68,13 @@ export function LoginForm() {
         <h1 className="mt-2 text-2xl font-semibold text-text-primary">
           Sign in
         </h1>
-        <p className="mt-2 text-sm text-text-secondary">
-          {DEMO_COMPANY_NAME}
-        </p>
+        {isDemo ? (
+          <p className="mt-2 text-sm text-text-secondary">{DEMO_COMPANY_NAME}</p>
+        ) : (
+          <p className="mt-2 text-sm text-text-secondary">
+            Use your work email and password.
+          </p>
+        )}
       </div>
 
       <form
@@ -76,14 +82,15 @@ export function LoginForm() {
         className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-6 shadow-sm"
         noValidate
       >
-        {authMode === "demo" ? (
+        {isDemo ? (
           <p className="mb-4 rounded-[var(--radius-md)] border border-border-default bg-bg-muted/60 px-3 py-2 text-xs text-text-secondary">
             Demo authentication only — not production security. Credentials are
             checked in this browser session.
           </p>
         ) : (
           <p className="mb-4 rounded-[var(--radius-md)] border border-border-default bg-bg-muted/60 px-3 py-2 text-xs text-text-secondary">
-            Sign in with your organization account.
+            Sign in with your organization account. Contact an Admin if you need
+            a password reset.
           </p>
         )}
 
@@ -124,7 +131,7 @@ export function LoginForm() {
         </Button>
       </form>
 
-      {authMode === "demo" ? (
+      {isDemo ? (
         <div className="mt-6 rounded-[var(--radius-md)] border border-dashed border-border-default bg-bg-surface/80 px-4 py-3 text-xs text-text-secondary">
           <p className="font-medium text-text-primary">Demo accounts</p>
           <ul className="mt-2 space-y-1">

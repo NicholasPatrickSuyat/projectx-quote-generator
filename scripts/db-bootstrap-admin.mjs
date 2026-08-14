@@ -41,6 +41,20 @@ function loadEnvFiles(files = [".env.local", ".env"]) {
 
 loadEnvFiles();
 
+function assertBootstrapAllowed() {
+  const allow =
+    (process.env.ALLOW_PRODUCTION_BOOTSTRAP ?? "").trim() === "1";
+  const appEnv = (process.env.APP_ENV ?? "").trim().toLowerCase();
+  const vercelEnv = (process.env.VERCEL_ENV ?? "").trim().toLowerCase();
+  if ((appEnv === "production" || vercelEnv === "production") && !allow) {
+    throw new Error(
+      "db:bootstrap:admin refuses production unless ALLOW_PRODUCTION_BOOTSTRAP=1 (Gate 2 cutover only). Prefer interactive password; never leave BOOTSTRAP_ADMIN_PASSWORD set permanently.",
+    );
+  }
+}
+
+assertBootstrapAllowed();
+
 function normalizeEmail(email) {
   return String(email ?? "")
     .trim()

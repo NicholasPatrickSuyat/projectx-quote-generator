@@ -4,7 +4,8 @@ type PersistenceHybridNoticeProps = {
 
 /**
  * Concise local-development database-mode notice.
- * Hidden in session mode. Demo+database is refused outside APP_ENV=development.
+ * Hidden in session mode and in AUTH_MODE=production (client installs).
+ * Demo+database is refused outside APP_ENV=development.
  */
 export function PersistenceHybridNotice({ show }: PersistenceHybridNoticeProps) {
   if (!show) return null;

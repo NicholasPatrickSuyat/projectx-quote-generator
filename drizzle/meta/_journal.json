@@ -43,6 +43,13 @@
       "when": 1786668383529,
       "tag": "0005_adorable_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786673800987,
+      "tag": "0006_striped_longshot",
+      "breakpoints": true
     }
   ]
 }

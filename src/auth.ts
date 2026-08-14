@@ -1,15 +1,28 @@
 /**
- * Auth.js (next-auth v5) — Credentials + JWT only (M18).
+ * Auth.js (next-auth v5) — Credentials + JWT only (M18/M20).
  * No OAuth providers / no Auth.js database adapter tables.
  *
  * Session freshness: JWT carries authVersion. On session access the jwt
  * callback reloads the user (throttled) and invalidates the token when
  * inactive or authVersion mismatches (password reset / role change / deactivate).
+ *
+ * M20: Neon-backed login rate limiting (email + trusted IP) before password check.
  */
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { getAuthMode, assertAuthSecretPresent } from "@/lib/auth/mode";
+import {
+  getAuthMode,
+  assertAuthSecretPresent,
+  assertProductionAuthConfigured,
+} from "@/lib/auth/mode";
+import { extractTrustedClientIp } from "@/lib/auth/client-ip";
+import {
+  finalizeSuccessfulLogin,
+  LoginRateLimitedError,
+  LoginRateLimiterUnavailableError,
+  reserveLoginAttempt,
+} from "@/lib/auth/login-rate-limit";
 import { getPersistenceMode } from "@/lib/persistence/mode";
 import { verifyPassword } from "@/lib/auth/password";
 import { credentialsSchema } from "@/lib/auth/validation";
@@ -66,10 +79,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (getAuthMode() !== "production") {
           return null;
         }
+        // Fail closed: production auth requires database + secret.
+        assertProductionAuthConfigured();
+
         if (getPersistenceMode() !== "database") {
           throw new Error(
             "AUTH_MODE=production requires PERSISTENCE_MODE=database for Credentials login.",
@@ -81,8 +97,35 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const row = await findUserByEmailForLogin(parsed.data.email);
-        // Generic failure for unknown / inactive / bad password (no enumeration).
+        const normalizedEmail = parsed.data.email;
+        const clientIp = extractTrustedClientIp(request);
+        const rateInput = { normalizedEmail, clientIp };
+
+        // Atomic reserve BEFORE user lookup / password verify (closes TOCTOU).
+        // Limiter storage failure → deny (fail closed). Same generic null to client.
+        try {
+          await reserveLoginAttempt(rateInput);
+        } catch (error) {
+          if (
+            error instanceof LoginRateLimitedError ||
+            error instanceof LoginRateLimiterUnavailableError
+          ) {
+            return null;
+          }
+          console.error("[auth] login rate limiter error — denying login");
+          return null;
+        }
+
+        let row: Awaited<ReturnType<typeof findUserByEmailForLogin>>;
+        try {
+          row = await findUserByEmailForLogin(normalizedEmail);
+        } catch {
+          console.error("[auth] login user lookup error — denying login");
+          return null;
+        }
+
+        // Unknown, inactive, or bad password: reservation already consumed.
+        // Do not reveal which case; do not attempt a second limiter write.
         if (!row || !row.active) {
           return null;
         }
@@ -94,6 +137,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!valid) {
           return null;
         }
+
+        // Success: clear email row; release one IP reservation (not full IP wipe).
+        await finalizeSuccessfulLogin(rateInput);
 
         return {
           id: row.id,

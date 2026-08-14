@@ -26,9 +26,13 @@ export type PersistencePublicInfo = {
  */
 export async function getPersistencePublicInfo(): Promise<PersistencePublicInfo> {
   const mode = getPersistenceMode();
+  const { getAuthMode } = await import("@/lib/auth/mode");
+  // Client production (AUTH_MODE=production) must not show local-dev hybrid copy.
+  const showHybridNotice =
+    mode === "database" && getAuthMode() !== "production";
   return {
     mode,
-    showHybridNotice: mode === "database",
+    showHybridNotice,
   };
 }
 

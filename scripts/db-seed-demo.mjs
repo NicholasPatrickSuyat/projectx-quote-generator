@@ -26,10 +26,17 @@ function loadEnvFiles(files = [".env.local", ".env"]) {
 
 loadEnvFiles();
 
-const appEnv = (process.env.APP_ENV ?? "").trim().toLowerCase();
-if (appEnv === "production") {
-  throw new Error("db:seed:demo refuses to run when APP_ENV=production.");
+function assertSeedAllowed() {
+  const appEnv = (process.env.APP_ENV ?? "").trim().toLowerCase();
+  const vercelEnv = (process.env.VERCEL_ENV ?? "").trim().toLowerCase();
+  if (appEnv === "production" || vercelEnv === "production") {
+    throw new Error(
+      "db:seed:demo refuses to run against production. Never seed fake catalog/data into a client database.",
+    );
+  }
 }
+
+assertSeedAllowed();
 
 const mode = (process.env.PERSISTENCE_MODE ?? "session").trim().toLowerCase();
 if (mode !== "database") {

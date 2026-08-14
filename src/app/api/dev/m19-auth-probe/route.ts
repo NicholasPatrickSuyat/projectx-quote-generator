@@ -50,6 +50,9 @@ function probeEnabled(): boolean {
   ) {
     return false;
   }
+  if ((process.env.APP_ENV ?? "").trim().toLowerCase() === "production") {
+    return false;
+  }
   return getAppEnv() === "development";
 }
 

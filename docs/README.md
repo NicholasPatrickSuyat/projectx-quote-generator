@@ -16,6 +16,12 @@ Project documentation for Quote Generator Pro.
 | [milestone-18-implementation-plan.md](./milestone-18-implementation-plan.md) | Production authentication + server authorization |
 | [milestone-18-authorization-matrix.md](./milestone-18-authorization-matrix.md) | Production server authorization matrix + session revocation |
 | [milestone-19-implementation-plan.md](./milestone-19-implementation-plan.md) | Customers + Quotes + PDF snapshot persistence (M19) |
+| [milestone-20-implementation-plan.md](./milestone-20-implementation-plan.md) | Production hardening + first-client cutover planning |
+| [m20-backup-recovery.md](./m20-backup-recovery.md) | Neon recovery verification + drill |
+| [m20-monitoring.md](./m20-monitoring.md) | First-week Vercel log watchlist |
+| [m20-cutover-runbook.md](./m20-cutover-runbook.md) | Gate 2 ordered cutover (do not execute in Gate 1) |
+| [m20-rollback-runbook.md](./m20-rollback-runbook.md) | Client deploy/DB rollback guidance |
+| [m20-first-client-checklist.md](./m20-first-client-checklist.md) | Concise first-business deploy checklist |
 
 ## Status
 

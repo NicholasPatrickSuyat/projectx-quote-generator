@@ -27,15 +27,19 @@ function loadEnvFiles(files = [".env.local", ".env"]) {
 loadEnvFiles();
 
 function assertNonProductionBootstrap() {
+  const allow =
+    (process.env.ALLOW_PRODUCTION_BOOTSTRAP ?? "").trim() === "1";
   const appEnv = (process.env.APP_ENV ?? "").trim().toLowerCase();
-  if (appEnv === "production") {
+  const vercelEnv = (process.env.VERCEL_ENV ?? "").trim().toLowerCase();
+
+  if (vercelEnv === "production" && !allow) {
     throw new Error(
-      "db:bootstrap:company refuses to run when APP_ENV=production (M17). Production auth/bootstrap belongs in M18+.",
+      "db:bootstrap:company refuses to run on Vercel production unless ALLOW_PRODUCTION_BOOTSTRAP=1 (Gate 2 cutover only).",
     );
   }
-  if (process.env.VERCEL_ENV === "production") {
+  if (appEnv === "production" && !allow) {
     throw new Error(
-      "db:bootstrap:company refuses to run on Vercel production (M17).",
+      "db:bootstrap:company refuses APP_ENV=production unless ALLOW_PRODUCTION_BOOTSTRAP=1 (explicit Gate 2 cutover). Never leave this flag set permanently.",
     );
   }
 }

@@ -1,10 +1,10 @@
 /**
- * Authentication mode (M18 cutover control).
+ * Authentication mode (M18/M20 cutover control).
  *
  * AUTH_MODE=demo (default) — M13 DEMO-ONLY login; cannot authorize durable DB writes.
  * AUTH_MODE=production — Auth.js + app_users; real server authorization.
  *
- * Temporary migration mechanism — not a permanent dual-auth architecture.
+ * Temporary migration mechanism for sales-demo vs client production.
  * Never silently fall back from production → demo.
  */
 
@@ -34,6 +34,11 @@ export function assertAuthSecretPresent(): string {
   return secret;
 }
 
+/**
+ * Fail closed for production auth runtime.
+ * Requires AUTH_MODE=production, AUTH_SECRET, and PERSISTENCE_MODE=database.
+ * Never falls back to demo/session.
+ */
 export function assertProductionAuthConfigured(): void {
   if (getAuthMode() !== "production") {
     throw new Error("This operation requires AUTH_MODE=production.");
@@ -44,7 +49,7 @@ export function assertProductionAuthConfigured(): void {
     .toLowerCase();
   if (persistence !== "database") {
     throw new Error(
-      "AUTH_MODE=production requires PERSISTENCE_MODE=database.",
+      "AUTH_MODE=production requires PERSISTENCE_MODE=database. Refusing silent fallback to session.",
     );
   }
 }
