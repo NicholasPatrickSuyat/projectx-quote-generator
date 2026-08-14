@@ -37,14 +37,16 @@ upsert("APP_ENV", "development");
 if (mode === "production") {
   upsert("PERSISTENCE_MODE", "database");
   upsert("M18_AUTH_PROBE", "1");
+  upsert("M19_AUTH_PROBE", "1");
   if (!/^AUTH_SECRET=.+/m.test(text)) {
     console.error("AUTH_SECRET missing in .env.local — run m18-prepare-local-auth-env.mjs first");
     process.exit(1);
   }
 } else {
   upsert("PERSISTENCE_MODE", "session");
-  // Leave M18_AUTH_PROBE unset/off for demo
+  // Leave auth probes unset/off for demo
   upsert("M18_AUTH_PROBE", "0");
+  upsert("M19_AUTH_PROBE", "0");
 }
 
 writeFileSync(envPath, text, "utf8");

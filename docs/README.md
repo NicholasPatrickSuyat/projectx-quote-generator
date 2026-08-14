@@ -15,6 +15,7 @@ Project documentation for Quote Generator Pro.
 | [milestone-17-implementation-plan.md](./milestone-17-implementation-plan.md) | Production persistence foundation (Settings + Catalog) |
 | [milestone-18-implementation-plan.md](./milestone-18-implementation-plan.md) | Production authentication + server authorization |
 | [milestone-18-authorization-matrix.md](./milestone-18-authorization-matrix.md) | Production server authorization matrix + session revocation |
+| [milestone-19-implementation-plan.md](./milestone-19-implementation-plan.md) | Customers + Quotes + PDF snapshot persistence (M19) |
 
 ## Status
 
@@ -25,15 +26,15 @@ Project documentation for Quote Generator Pro.
 
 Default authentication is **DEMO-ONLY** (`AUTH_MODE=demo`). Production Auth.js + `app_users` is available when `AUTH_MODE=production` (local/non-production cutover testing only until separately approved).
 
-### Auth + persistence cutover (M17/M18)
+### Auth + persistence cutover (M17–M19)
 
 | Mode combo | Behavior |
 |------------|----------|
 | `AUTH_MODE=demo` + `PERSISTENCE_MODE=session` | Public demo (default) |
 | `AUTH_MODE=demo` + `PERSISTENCE_MODE=database` | **Local `APP_ENV=development` only** — refused on preview/production hosts |
-| `AUTH_MODE=production` + `PERSISTENCE_MODE=database` | Auth.js + DB users; capability-gated Settings/Catalog/Users |
+| `AUTH_MODE=production` + `PERSISTENCE_MODE=database` | Auth.js + DB users; capability-gated Settings/Catalog/Users/Customers/Quotes |
 
-Customers / Quotes remain session until M19.
+When `PERSISTENCE_MODE=database`, Settings, Catalog, Customers, Quotes, and PDF snapshots are Neon-backed. Public production stays session until cutover approval.
 
 ## Completed milestones (implementation)
 
@@ -51,14 +52,16 @@ Customers / Quotes remain session until M19.
 - Milestone 15 — Demo readiness & documentation freeze  
 - Milestone 16 — Production architecture planning  
 - Milestone 17 — Persistence foundation (Settings + Catalog; production stays session)  
-- Milestone 18 — Production auth + server authorization — **implemented locally; awaiting approval** (no public cutover)
+- Milestone 18 — Production auth + server authorization (no public cutover)  
+- Milestone 19 — Customers + Quotes + PDF snapshot durability — **implementation in progress / awaiting approval** (no public cutover)
 
 ## Explicitly deferred
 
 - Public production auth/database **cutover** (separate approval; do not flip Vercel env yet)  
-- Customers / Quotes / PDF snapshot durability (M19)  
+- Login rate limiting (**PRODUCTION CUTOVER BLOCKER** / M20 hardening)  
 - Email / SMS / re-send  
 - Dedicated Archive page (list filters suffice for V1 demo)  
 - Global search / notifications product  
+- Retiring session/demo Customer + Quote backends (after verified cutover)  
 
 **Do not rewrite Product Specification §24** merely to update historical checkboxes — the living status lives here and in the root `README.md`.

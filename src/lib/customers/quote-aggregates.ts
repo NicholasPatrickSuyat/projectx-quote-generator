@@ -41,7 +41,7 @@ export function buildCustomerQuoteAggregates(
     .slice(0, RECENT_QUOTE_LIMIT)
     .map((quote) => ({
       id: quote.id,
-      number: quote.id,
+      number: quote.quoteNumber,
       status: quote.status,
       date: quote.quoteDate,
       total: quote.grandTotal,

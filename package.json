@@ -11,7 +11,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:bootstrap:company": "node scripts/db-bootstrap-company.mjs",
     "db:bootstrap:admin": "node scripts/db-bootstrap-admin.mjs",
-    "db:seed:demo": "node scripts/db-seed-demo.mjs"
+    "db:seed:demo": "node scripts/db-seed-demo.mjs",
+    "db:seed:customers-quotes": "node scripts/db-seed-customers-quotes.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

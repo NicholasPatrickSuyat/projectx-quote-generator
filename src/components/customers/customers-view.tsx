@@ -5,6 +5,7 @@ import { CustomerSummary } from "@/components/customers/customer-summary";
 import { IconPlus, IconSearch, IconUsersEmpty } from "@/components/icons";
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
+import { PersistenceHybridNotice } from "@/components/persistence/persistence-hybrid-notice";
 import {
   ActiveArchivedToggle,
   FilterBar,
@@ -92,6 +93,8 @@ export function CustomersView() {
     updateCustomer,
     archiveCustomer,
     restoreCustomer,
+    showHybridNotice,
+    lastError,
   } = useCustomerSession();
   const { capabilities } = useDemoAuthSession();
   const searchParams = useSearchParams();
@@ -191,7 +194,7 @@ export function CustomersView() {
     setBaselineForm(emptyCustomerForm());
   }
 
-  function saveCustomer() {
+  async function saveCustomer() {
     const nextErrors = validateCustomerForm(formValues);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
@@ -213,36 +216,48 @@ export function CustomersView() {
       internalNotes: formValues.internalNotes.trim(),
     };
 
-    if (panelMode === "create") {
-      const created = createCustomer(trimmed);
-      setSelectedId(created.id);
-      setPanelMode("summary");
-      setBaselineForm(customerToFormValues(created));
-      setFormValues(customerToFormValues(created));
-      return;
-    }
-
-    if (panelMode === "edit" && selectedId) {
-      const updated = updateCustomer(selectedId, trimmed);
-      if (updated) {
+    try {
+      if (panelMode === "create") {
+        const created = await createCustomer(trimmed);
+        setSelectedId(created.id);
         setPanelMode("summary");
-        setBaselineForm(customerToFormValues(updated));
-        setFormValues(customerToFormValues(updated));
+        setBaselineForm(customerToFormValues(created));
+        setFormValues(customerToFormValues(created));
+        return;
       }
+
+      if (panelMode === "edit" && selectedId) {
+        const updated = await updateCustomer(selectedId, trimmed);
+        if (updated) {
+          setPanelMode("summary");
+          setBaselineForm(customerToFormValues(updated));
+          setFormValues(customerToFormValues(updated));
+        }
+      }
+    } catch {
+      // lastError is set by the customer session provider; keep the form open.
     }
   }
 
-  function handleArchiveCustomer(customer: Customer) {
-    archiveCustomer(customer.id);
-    if (selectedId === customer.id) {
-      setPanelMode("summary");
+  async function handleArchiveCustomer(customer: Customer) {
+    try {
+      await archiveCustomer(customer.id);
+      if (selectedId === customer.id) {
+        setPanelMode("summary");
+      }
+    } catch {
+      // lastError is set by the customer session provider
     }
   }
 
-  function handleRestoreCustomer(customer: Customer) {
-    restoreCustomer(customer.id);
-    if (selectedId === customer.id) {
-      setPanelMode("summary");
+  async function handleRestoreCustomer(customer: Customer) {
+    try {
+      await restoreCustomer(customer.id);
+      if (selectedId === customer.id) {
+        setPanelMode("summary");
+      }
+    } catch {
+      // lastError is set by the customer session provider
     }
   }
 
@@ -284,7 +299,7 @@ export function CustomersView() {
         label: "New Quote",
         disabled: customer.archived,
         onSelect: () => {
-          router.push(`/quotes/new?customer=${customer.id}`);
+          router.push(`/quotes/new?customer=${customer.customerNumber}`);
         },
       },
     ];
@@ -318,7 +333,7 @@ export function CustomersView() {
             {customerDisplayName(row)}
           </p>
           <p className="text-xs text-text-secondary font-mono tabular-nums">
-            {row.id}
+            {row.customerNumber}
           </p>
         </div>
       ),
@@ -437,9 +452,9 @@ export function CustomersView() {
     panelMode === "create"
       ? "Add a reusable customer record for quoting."
       : panelMode === "edit" && selectedCustomer
-        ? `${selectedCustomer.id}`
+        ? `${selectedCustomer.customerNumber}`
         : selectedCustomer
-          ? `${selectedCustomer.id} · ${customerRecordStatus(selectedCustomer)}`
+          ? `${selectedCustomer.customerNumber} · ${customerRecordStatus(selectedCustomer)}`
           : undefined;
 
   return (
@@ -454,6 +469,13 @@ export function CustomersView() {
           </Button>
         }
       />
+
+      <PersistenceHybridNotice show={showHybridNotice} />
+      {lastError ? (
+        <p className="text-sm text-danger" role="alert">
+          {lastError}
+        </p>
+      ) : null}
 
       <FilterBar>
         <div className="w-full sm:max-w-sm">
@@ -662,13 +684,13 @@ export function CustomersView() {
           ) : selectedCustomer && !selectedCustomer.archived ? (
             <div className="flex flex-wrap justify-end gap-2">
               <Link
-                href={`/quotes?customer=${selectedCustomer.id}`}
+                href={`/quotes?customer=${selectedCustomer.customerNumber}`}
                 className={buttonClassName({ variant: "secondary" })}
               >
                 View Quotes
               </Link>
               <Link
-                href={`/quotes/new?customer=${selectedCustomer.id}`}
+                href={`/quotes/new?customer=${selectedCustomer.customerNumber}`}
                 className={buttonClassName({ variant: "primary" })}
               >
                 New Quote
@@ -734,7 +756,7 @@ export function CustomersView() {
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           if (confirm?.type === "archive") {
-            handleArchiveCustomer(confirm.customer);
+            void handleArchiveCustomer(confirm.customer);
           }
           setConfirm(null);
         }}
@@ -749,7 +771,7 @@ export function CustomersView() {
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           if (confirm?.type === "restore") {
-            handleRestoreCustomer(confirm.customer);
+            void handleRestoreCustomer(confirm.customer);
           }
           setConfirm(null);
         }}

@@ -63,7 +63,7 @@ export function QuoteSummary({
         </div>
 
         <dl className="space-y-3">
-          <DetailRow label="Quote ID" value={quote.id} />
+          <DetailRow label="Quote ID" value={quote.quoteNumber} />
           <DetailRow label="Quote Date" value={formatShortDate(quote.quoteDate)} />
           <DetailRow
             label="Valid Until"
@@ -90,8 +90,8 @@ export function QuoteSummary({
               {snap.companyName ? (
                 <DetailRow label="Company" value={snap.companyName} />
               ) : null}
-              {snap.customerId ? (
-                <DetailRow label="Customer ID" value={snap.customerId} />
+              {snap.customerNumber ? (
+                <DetailRow label="Customer ID" value={snap.customerNumber} />
               ) : null}
               {snap.phone ? <DetailRow label="Phone" value={snap.phone} /> : null}
               {snap.email ? <DetailRow label="Email" value={snap.email} /> : null}

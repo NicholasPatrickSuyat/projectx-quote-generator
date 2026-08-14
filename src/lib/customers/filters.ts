@@ -58,6 +58,7 @@ export function matchesCustomerSearch(
   if (!q) return true;
 
   const haystack = [
+    customer.customerNumber,
     customer.firstName,
     customer.lastName,
     customerDisplayName(customer),

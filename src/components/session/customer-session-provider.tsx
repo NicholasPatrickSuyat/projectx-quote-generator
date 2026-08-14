@@ -1,7 +1,19 @@
 "use client";
 
 import { useDemoAuthSession } from "@/components/session/demo-auth-session-provider";
-import { getDemoCustomers, nextCustomerId } from "@/lib/customers/demo-data";
+import {
+  archiveCustomerInDb,
+  createCustomerInDb,
+  loadCustomersFromDb,
+  restoreCustomerInDb,
+  updateCustomerInDb,
+} from "@/lib/actions/customers";
+import { getPersistencePublicInfo } from "@/lib/actions/persistence";
+import {
+  createCustomerId,
+  getDemoCustomers,
+  nextCustomerNumber,
+} from "@/lib/customers/demo-data";
 import { applyQuoteAggregatesToCustomers } from "@/lib/customers/quote-aggregates";
 import { startOfDay, toIsoDate } from "@/lib/format";
 import type { Customer, CustomerFormValues } from "@/types/customer";
@@ -10,7 +22,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -18,12 +32,20 @@ import {
 
 type CustomerSessionContextValue = {
   ready: boolean;
+  persistenceMode: "session" | "database" | null;
+  showHybridNotice: boolean;
   customers: Customer[];
+  loadFailed: boolean;
+  lastError: string | null;
+  clearMutationError: () => void;
   getCustomer: (id: string) => Customer | undefined;
-  createCustomer: (values: CustomerFormValues) => Customer;
-  updateCustomer: (id: string, values: CustomerFormValues) => Customer | null;
-  archiveCustomer: (id: string) => void;
-  restoreCustomer: (id: string) => void;
+  createCustomer: (values: CustomerFormValues) => Promise<Customer>;
+  updateCustomer: (
+    id: string,
+    values: CustomerFormValues,
+  ) => Promise<Customer | null>;
+  archiveCustomer: (id: string) => Promise<void>;
+  restoreCustomer: (id: string) => Promise<void>;
   /** Recompute quote aggregates from live QuoteSession quotes (non-archived only). */
   applyQuoteAggregates: (quotes: Quote[]) => void;
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
@@ -58,16 +80,64 @@ function useClientToday(): Date | null {
   return ms === null ? null : new Date(ms);
 }
 
+function toErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function CustomerSessionProvider({ children }: { children: ReactNode }) {
   const { capabilities } = useDemoAuthSession();
   const today = useClientToday();
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [seeded, setSeeded] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [persistenceMode, setPersistenceMode] = useState<
+    "session" | "database" | null
+  >(null);
+  const [showHybridNotice, setShowHybridNotice] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const bootCompletedRef = useRef(false);
 
-  if (today && !seeded) {
-    setSeeded(true);
-    setCustomers(getDemoCustomers(today));
-  }
+  useEffect(() => {
+    if (bootCompletedRef.current) return;
+    let cancelled = false;
+    async function boot() {
+      try {
+        const info = await getPersistencePublicInfo();
+        if (cancelled) return;
+        setPersistenceMode(info.mode);
+        setShowHybridNotice(info.showHybridNotice);
+
+        if (info.mode === "database") {
+          const loaded = await loadCustomersFromDb();
+          if (cancelled) return;
+          setCustomers(loaded);
+          setLoadFailed(false);
+          setLastError(null);
+          bootCompletedRef.current = true;
+          setReady(true);
+          return;
+        }
+
+        if (!today) return;
+        setCustomers(getDemoCustomers(today));
+        setLoadFailed(false);
+        setLastError(null);
+        bootCompletedRef.current = true;
+        setReady(true);
+      } catch (error) {
+        if (cancelled) return;
+        setLastError(toErrorMessage(error, "Failed to load customers."));
+        setCustomers([]);
+        setLoadFailed(true);
+        bootCompletedRef.current = true;
+        setReady(true);
+      }
+    }
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+  }, [today]);
 
   const applyQuoteAggregates = useCallback((quotes: Quote[]) => {
     setCustomers((prev) => applyQuoteAggregatesToCustomers(prev, quotes));
@@ -76,14 +146,50 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CustomerSessionContextValue>(() => {
     const canRestore = capabilities.canRestore;
 
+    function assertMutationsReady(mode: "session" | "database") {
+      if (!ready || persistenceMode === null) {
+        throw new Error(
+          "Customers are still loading. Wait until persistence is ready before making changes.",
+        );
+      }
+      if (persistenceMode === "database" && loadFailed) {
+        throw new Error(
+          "Customers failed to load from the database. Refresh the page before making changes.",
+        );
+      }
+      if (persistenceMode !== mode) {
+        throw new Error(
+          `Customer persistence mode mismatch (expected ${mode}, got ${persistenceMode}).`,
+        );
+      }
+    }
+
     function getCustomer(id: string) {
       return customers.find((customer) => customer.id === id);
     }
 
-    function createCustomer(values: CustomerFormValues): Customer {
+    async function createCustomer(
+      values: CustomerFormValues,
+    ): Promise<Customer> {
+      if (persistenceMode === "database") {
+        assertMutationsReady("database");
+        try {
+          const created = await createCustomerInDb(values);
+          setCustomers((prev) => [created, ...prev]);
+          setLastError(null);
+          return created;
+        } catch (error) {
+          const message = toErrorMessage(error, "Failed to create customer.");
+          setLastError(message);
+          throw new Error(message);
+        }
+      }
+
+      assertMutationsReady("session");
       const now = toIsoDate(startOfDay(new Date()));
       const created: Customer = {
-        id: nextCustomerId(customers),
+        id: createCustomerId(),
+        customerNumber: nextCustomerNumber(customers),
         ...values,
         createdAt: now,
         updatedAt: now,
@@ -95,13 +201,32 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
         recentQuotes: [],
       };
       setCustomers((prev) => [created, ...prev]);
+      setLastError(null);
       return created;
     }
 
-    function updateCustomer(
+    async function updateCustomer(
       id: string,
       values: CustomerFormValues,
-    ): Customer | null {
+    ): Promise<Customer | null> {
+      if (persistenceMode === "database") {
+        assertMutationsReady("database");
+        try {
+          const updated = await updateCustomerInDb(id, values);
+          if (!updated) return null;
+          setCustomers((prev) =>
+            prev.map((customer) => (customer.id === id ? updated : customer)),
+          );
+          setLastError(null);
+          return updated;
+        } catch (error) {
+          const message = toErrorMessage(error, "Failed to update customer.");
+          setLastError(message);
+          throw new Error(message);
+        }
+      }
+
+      assertMutationsReady("session");
       const now = toIsoDate(startOfDay(new Date()));
       let updated: Customer | null = null;
       setCustomers((prev) =>
@@ -115,10 +240,33 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
           return updated;
         }),
       );
+      setLastError(null);
       return updated;
     }
 
-    function archiveCustomer(id: string) {
+    async function archiveCustomer(id: string): Promise<void> {
+      if (persistenceMode === "database") {
+        assertMutationsReady("database");
+        try {
+          await archiveCustomerInDb(id);
+          const now = toIsoDate(startOfDay(new Date()));
+          setCustomers((prev) =>
+            prev.map((customer) =>
+              customer.id === id
+                ? { ...customer, archived: true, updatedAt: now }
+                : customer,
+            ),
+          );
+          setLastError(null);
+          return;
+        } catch (error) {
+          const message = toErrorMessage(error, "Failed to archive customer.");
+          setLastError(message);
+          throw new Error(message);
+        }
+      }
+
+      assertMutationsReady("session");
       const now = toIsoDate(startOfDay(new Date()));
       setCustomers((prev) =>
         prev.map((customer) =>
@@ -127,10 +275,33 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
             : customer,
         ),
       );
+      setLastError(null);
     }
 
-    function restoreCustomer(id: string) {
+    async function restoreCustomer(id: string): Promise<void> {
       if (!canRestore) return;
+      if (persistenceMode === "database") {
+        assertMutationsReady("database");
+        try {
+          await restoreCustomerInDb(id);
+          const now = toIsoDate(startOfDay(new Date()));
+          setCustomers((prev) =>
+            prev.map((customer) =>
+              customer.id === id
+                ? { ...customer, archived: false, updatedAt: now }
+                : customer,
+            ),
+          );
+          setLastError(null);
+          return;
+        } catch (error) {
+          const message = toErrorMessage(error, "Failed to restore customer.");
+          setLastError(message);
+          throw new Error(message);
+        }
+      }
+
+      assertMutationsReady("session");
       const now = toIsoDate(startOfDay(new Date()));
       setCustomers((prev) =>
         prev.map((customer) =>
@@ -139,11 +310,20 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
             : customer,
         ),
       );
+      setLastError(null);
     }
 
     return {
-      ready: seeded,
+      ready,
+      persistenceMode,
+      showHybridNotice,
       customers,
+      loadFailed,
+      lastError,
+      clearMutationError: () => {
+        if (loadFailed) return;
+        setLastError(null);
+      },
       getCustomer,
       createCustomer,
       updateCustomer,
@@ -152,7 +332,16 @@ export function CustomerSessionProvider({ children }: { children: ReactNode }) {
       applyQuoteAggregates,
       setCustomers,
     };
-  }, [customers, seeded, capabilities.canRestore, applyQuoteAggregates]);
+  }, [
+    customers,
+    ready,
+    loadFailed,
+    persistenceMode,
+    showHybridNotice,
+    lastError,
+    capabilities.canRestore,
+    applyQuoteAggregates,
+  ]);
 
   return (
     <CustomerSessionContext.Provider value={value}>

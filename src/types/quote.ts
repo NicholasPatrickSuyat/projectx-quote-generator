@@ -19,7 +19,10 @@ export type DiscountType = "none" | "percent" | "fixed";
 export type QuoteDiscountType = DiscountType;
 
 export type QuoteCustomerSnapshot = {
+  /** Customer UUID (live relationship key). */
   customerId: string;
+  /** Business customer number at snapshot time (CUST-000001). */
+  customerNumber: string;
   customerName: string;
   companyName: string;
   phone: string;
@@ -31,6 +34,7 @@ export type QuoteCustomerSnapshot = {
 };
 
 export type QuoteLineItem = {
+  /** Internal UUID. */
   id: string;
   category: LineCategory;
   description: string;
@@ -59,6 +63,7 @@ export type QuotePdfSnapshot = {
     pdfFooterText: string;
   };
   quote: {
+    /** Business quote number shown on the PDF (QUO-000001). */
     quoteId: string;
     quoteDate: string;
     validUntil: string | null;
@@ -78,15 +83,20 @@ export type QuotePdfSnapshot = {
   };
 };
 
-/** Full quote record for Quotes list + Builder (session-only). */
+/** Full quote record for Quotes list + Builder. */
 export type Quote = {
+  /** Internal UUID primary key. */
   id: string;
+  /** Business identifier shown in UI / PDF (QUO-000001). */
+  quoteNumber: string;
   customerSnapshot: QuoteCustomerSnapshot | null;
   jobDescription: string;
   status: QuoteStatus;
   quoteDate: string;
   validUntil: string | null;
   preparedBy: string;
+  /** Production-auth actor when known; null in demo/session or after user deletion. */
+  preparedByUserId: string | null;
   internalNotes: string;
   customerFacingMessage: string;
   termsAndConditions: string;
@@ -131,6 +141,7 @@ export function quoteStatusTone(
 export function emptyCustomerSnapshot(): QuoteCustomerSnapshot {
   return {
     customerId: "",
+    customerNumber: "",
     customerName: "",
     companyName: "",
     phone: "",

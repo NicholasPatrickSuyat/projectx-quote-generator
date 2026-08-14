@@ -1,7 +1,9 @@
 export type CustomerRecordStatus = "Active" | "Archived";
 
 export type CustomerRecentQuote = {
+  /** Quote UUID (internal). */
   id: string;
+  /** Business quote number, e.g. QUO-000001. */
   number: string;
   status: "Draft" | "Sent" | "Accepted" | "Rejected" | "Expired";
   date: string;
@@ -9,7 +11,10 @@ export type CustomerRecentQuote = {
 };
 
 export type Customer = {
+  /** Internal UUID primary key. */
   id: string;
+  /** Business identifier shown in UI / deep links (CUST-000001). */
+  customerNumber: string;
   firstName: string;
   lastName: string;
   phone: string;
@@ -23,6 +28,7 @@ export type Customer = {
   createdAt: string;
   updatedAt: string;
   archived: boolean;
+  /** Derived from quotes — not persisted as source of truth. */
   totalQuotes: number;
   draftQuotes: number;
   acceptedQuotes: number;

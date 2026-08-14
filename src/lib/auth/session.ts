@@ -170,3 +170,53 @@ export async function requireDatabaseUsersRead(): Promise<AuthorizedUser> {
   const { user } = await requireCapability("canManageUsers");
   return user;
 }
+
+/**
+ * Durable Customers read (production): any authenticated active user.
+ * Demo + database hybrid: access-allowed without Auth.js (local only).
+ */
+export async function requireDatabaseCustomersRead(): Promise<AuthorizedUser | null> {
+  assertDatabaseAccessAllowed();
+  if (getAuthMode() !== "production") {
+    return null;
+  }
+  return requireActiveUser();
+}
+
+/**
+ * Durable Quotes read (production): any authenticated active user.
+ * Demo + database hybrid: access-allowed without Auth.js (local only).
+ */
+export async function requireDatabaseQuotesRead(): Promise<AuthorizedUser | null> {
+  assertDatabaseAccessAllowed();
+  if (getAuthMode() !== "production") {
+    return null;
+  }
+  return requireActiveUser();
+}
+
+/**
+ * Durable Customer writes: production auth + active Staff/Admin.
+ * Restore separately requires canRestore.
+ */
+export async function requireDatabaseCustomerMutation(): Promise<{
+  user: AuthorizedUser;
+  capabilities: RoleCapabilities;
+}> {
+  assertDatabaseMutationsAllowed();
+  const user = await requireActiveUser();
+  return { user, capabilities: capabilitiesForRole(user.role) };
+}
+
+/**
+ * Durable Quote writes: production auth + active Staff/Admin.
+ * Restore / expire / reactivate / prepared-by override use capability flags.
+ */
+export async function requireDatabaseQuoteMutation(): Promise<{
+  user: AuthorizedUser;
+  capabilities: RoleCapabilities;
+}> {
+  assertDatabaseMutationsAllowed();
+  const user = await requireActiveUser();
+  return { user, capabilities: capabilitiesForRole(user.role) };
+}

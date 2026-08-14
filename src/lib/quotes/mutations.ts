@@ -1,6 +1,6 @@
 import { withRecalculatedTotals } from "@/lib/quotes/calculations";
 import { addDays, startOfDay, toIsoDate } from "@/lib/format";
-import { nextLineId, nextQuoteId } from "@/lib/quotes/demo-data";
+import { createLineId, nextQuoteNumber } from "@/lib/quotes/demo-data";
 import { clearQuotePdfSnapshot } from "@/lib/pdf/snapshot";
 import type { CompanyQuoteDefaults } from "@/types/company";
 import type {
@@ -17,7 +17,7 @@ export function createEmptyLine(
   category: LineCategory = "Services",
 ): QuoteLineItem {
   return {
-    id: nextLineId(existing),
+    id: createLineId(),
     category,
     description: "",
     quantity: 1,
@@ -39,6 +39,7 @@ export function buildNewDraftQuote(
       Quote,
       | "jobDescription"
       | "preparedBy"
+      | "preparedByUserId"
       | "taxRate"
       | "discountType"
       | "discountValue"
@@ -51,7 +52,8 @@ export function buildNewDraftQuote(
 ): Quote {
   const todayIso = toIsoDate(startOfDay(today));
   const draft: Quote = {
-    id: nextQuoteId(existing),
+    id: crypto.randomUUID(),
+    quoteNumber: nextQuoteNumber(existing),
     customerSnapshot: snapshot,
     jobDescription: overrides?.jobDescription ?? "",
     status: "Draft",
@@ -60,6 +62,7 @@ export function buildNewDraftQuote(
       addDays(startOfDay(today), defaults.quoteValidityDays),
     ),
     preparedBy: overrides?.preparedBy ?? defaults.preparedBy,
+    preparedByUserId: overrides?.preparedByUserId ?? null,
     internalNotes: overrides?.internalNotes ?? "",
     customerFacingMessage:
       overrides?.customerFacingMessage ?? defaults.customerFacingMessage,
@@ -96,7 +99,8 @@ export function duplicateQuote(
 ): Quote {
   const todayIso = toIsoDate(startOfDay(today));
   const copy: Quote = {
-    id: nextQuoteId(existing),
+    id: crypto.randomUUID(),
+    quoteNumber: nextQuoteNumber(existing),
     customerSnapshot: source.customerSnapshot
       ? { ...source.customerSnapshot }
       : null,
@@ -107,6 +111,7 @@ export function duplicateQuote(
       addDays(startOfDay(today), defaults.quoteValidityDays),
     ),
     preparedBy: source.preparedBy,
+    preparedByUserId: null,
     internalNotes: source.internalNotes,
     customerFacingMessage: source.customerFacingMessage,
     termsAndConditions: source.termsAndConditions,
@@ -115,7 +120,7 @@ export function duplicateQuote(
     discountValue: source.discountValue,
     lineItems: source.lineItems.map((item, index) => ({
       ...item,
-      id: `LINE-${String(index + 1).padStart(4, "0")}`,
+      id: createLineId(),
       sortOrder: index,
     })),
     subtotal: 0,

@@ -37,6 +37,24 @@ Do not add a fake in-memory limiter on Vercel.
 
 Company scoping: users are loaded for the authenticated user’s `company_id` only (single-company install). Client-supplied company/role/capabilities are ignored.
 
+## Customers + Quotes (M19 extension)
+
+| Resource / action | Admin | Staff | Unauthenticated | Inactive / revoked JWT |
+|-------------------|-------|-------|-----------------|------------------------|
+| Customers list / read | Allow (any active user) | Allow (any active user) | Deny | Deny |
+| Customer create / update / archive | Allow | Allow | Deny | Deny |
+| Customer restore | Allow (`canRestore`) | Deny | Deny | Deny |
+| Quotes list / read | Allow (any active user) | Allow (any active user) | Deny | Deny |
+| Quote create / update / duplicate / archive | Allow | Allow* | Deny | Deny |
+| Mark Sent / Accept / Reject / Return to Draft / PDF freeze | Allow | Allow* | Deny | Deny |
+| Quote restore | Allow (`canRestore`) | Deny | Deny | Deny |
+| Manual Expire / Reactivate | Allow (`canOverrideQuoteStatus`) | Deny | Deny | Deny |
+| Prepared By override | Allow (`canOverridePreparedBy`) | Deny (forced to actor) | Deny | Deny |
+
+\*Staff follow existing lifecycle edit rules; Prepared By is normalized to the authenticated user.
+
+IDs: internal UUID PKs; business numbers `customer_number` / `quote_number` allocated via `entity_counters` inside create transactions.
+
 ## Session revocation (`auth_version`)
 
 Incremented on: password reset, role change, deactivation, password change during edit.  

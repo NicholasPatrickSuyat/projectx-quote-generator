@@ -41,19 +41,8 @@ import {
   computeLineTotal,
   withRecalculatedTotals,
 } from "@/lib/quotes/calculations";
-import { customerToSnapshot, nextLineId } from "@/lib/quotes/demo-data";
-import { createQuotePdfSnapshot } from "@/lib/pdf/snapshot";
-import {
-  archiveQuote,
-  markQuoteAccepted,
-  markQuoteExpired,
-  markQuoteRejected,
-  markQuoteSent,
-  quoteIsEditable,
-  reactivateQuoteToDraft,
-  restoreQuote,
-  returnQuoteToDraft,
-} from "@/lib/quotes/mutations";
+import { customerToSnapshot, createLineId } from "@/lib/quotes/demo-data";
+import { quoteIsEditable } from "@/lib/quotes/mutations";
 import {
   canMarkAsSent,
   firstQuoteFieldError,
@@ -66,7 +55,6 @@ import {
   formatShortDate,
   parseLocalDate,
   startOfDay,
-  toIsoDate,
 } from "@/lib/format";
 import type { CustomerFormValues } from "@/types/customer";
 import {
@@ -133,7 +121,7 @@ function catalogItemsToLines(
   for (const item of items) {
     const description = catalogLineDescription(item);
     const line: QuoteLineItem = {
-      id: nextLineId(lines),
+      id: createLineId(),
       category: item.category,
       description,
       quantity: 1,
@@ -162,6 +150,14 @@ export function QuoteBuilderView({
     createDraft,
     buildDraft,
     duplicate,
+    markSent,
+    returnToDraft,
+    markAccepted,
+    markRejected,
+    markExpired,
+    reactivate,
+    archive,
+    restore,
   } = useQuoteSession();
   const { ready: customersReady, customers, getCustomer, createCustomer } =
     useCustomerSession();
@@ -170,7 +166,6 @@ export function QuoteBuilderView({
     bootSettled: settingsBootSettled,
     loadFailed: settingsLoadFailed,
     lastError: settingsLastError,
-    getQuoteDefaults,
     settings,
   } = useCompanySettingsSession();
   const { currentUser, capabilities } = useDemoAuthSession();
@@ -267,8 +262,16 @@ export function QuoteBuilderView({
     if (mode === "create") {
       let snapshot: QuoteCustomerSnapshot | null = null;
       if (initialCustomerId) {
-        const customer = getCustomer(initialCustomerId);
-        if (customer && !customer.archived) {
+        const customer = initialCustomerId.startsWith("CUST-")
+          ? customers.find(
+              (item) =>
+                item.customerNumber === initialCustomerId && !item.archived,
+            )
+          : (() => {
+              const found = getCustomer(initialCustomerId);
+              return found && !found.archived ? found : undefined;
+            })();
+        if (customer) {
           snapshot = customerToSnapshot(customer);
         }
       }
@@ -358,15 +361,21 @@ export function QuoteBuilderView({
     setPickingCustomer(true);
   }
 
-  function handleCreateCustomerSubmit() {
+  async function handleCreateCustomerSubmit() {
     const errors = validateCustomerForm(customerForm);
     setCustomerFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    const created = createCustomer(customerForm);
-    applyCustomerSnapshot(customerToSnapshot(created));
-    setCustomerSlideOpen(false);
-    setCustomerForm(emptyCustomerForm());
-    setCustomerFormErrors({});
+    try {
+      const created = await createCustomer(customerForm);
+      applyCustomerSnapshot(customerToSnapshot(created));
+      setCustomerSlideOpen(false);
+      setCustomerForm(emptyCustomerForm());
+      setCustomerFormErrors({});
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Failed to create customer.",
+      );
+    }
   }
 
   function applyValidationFailure(errors: QuoteFieldErrors, reason?: string) {
@@ -376,7 +385,7 @@ export function QuoteBuilderView({
   }
 
   /** Sanitize empty lines, validate, and persist. Returns saved quote or null. */
-  function persistValidatedDraft(): Quote | null {
+  async function persistValidatedDraft(): Promise<Quote | null> {
     if (!recalculatedDraft) return null;
 
     const sanitized = withRecalculatedTotals({
@@ -391,68 +400,92 @@ export function QuoteBuilderView({
       return null;
     }
 
-    if (mode === "create") {
-      const snapshot = sanitized.customerSnapshot!;
-      const savedQuote = createDraft(snapshot, sanitized);
+    try {
+      if (mode === "create") {
+        const snapshot = sanitized.customerSnapshot!;
+        const savedQuote = await createDraft(snapshot, sanitized);
+        setDraft(savedQuote);
+        setBaseline(savedQuote);
+        setLastSavedAt(savedQuote.updatedAt);
+        setFieldErrors({});
+        setStatusMessage(null);
+        return savedQuote;
+      }
+
+      const savedQuote = await upsertQuote(sanitized);
       setDraft(savedQuote);
       setBaseline(savedQuote);
       setLastSavedAt(savedQuote.updatedAt);
       setFieldErrors({});
       setStatusMessage(null);
       return savedQuote;
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Failed to save quote.",
+      );
+      return null;
     }
-
-    const savedQuote = upsertQuote(sanitized);
-    setDraft(savedQuote);
-    setBaseline(savedQuote);
-    setLastSavedAt(savedQuote.updatedAt);
-    setFieldErrors({});
-    setStatusMessage(null);
-    return savedQuote;
   }
 
-  function handleSaveDraft() {
+  async function handleSaveDraft() {
     if (!recalculatedDraft) return;
     setSaving(true);
-    const savedQuote = persistValidatedDraft();
-    setSaving(false);
-    if (savedQuote && mode === "create") {
-      router.replace(`/quotes/${savedQuote.id}/edit`);
+    try {
+      const savedQuote = await persistValidatedDraft();
+      if (savedQuote && mode === "create") {
+        router.replace(`/quotes/${savedQuote.id}/edit`);
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
-  function persistAndMutate(apply: (quote: Quote, day: Date) => Quote) {
-    if (!recalculatedDraft || !today) return false;
+  /**
+   * Save editable business fields (when allowed), then run a dedicated
+   * server-owned lifecycle action. Never smuggles status/pdfSnapshot via upsert.
+   */
+  async function persistThenLifecycle(
+    action: (id: string) => Promise<void>,
+    options?: { saveContentFirst?: boolean },
+  ): Promise<Quote | null> {
+    if (!recalculatedDraft) return null;
+    const saveContentFirst = options?.saveContentFirst !== false;
+    let id = recalculatedDraft.id;
 
-    const sanitized = withRecalculatedTotals({
-      ...recalculatedDraft,
-      lineItems: stripEmptyLines(recalculatedDraft.lineItems),
-    });
+    try {
+      if (
+        saveContentFirst &&
+        !recalculatedDraft.archived &&
+        (recalculatedDraft.status === "Draft" ||
+          recalculatedDraft.status === "Sent")
+      ) {
+        const saved = await persistValidatedDraft();
+        if (!saved) return null;
+        id = saved.id;
+      }
 
-    const errors = validateQuoteForPersist(sanitized);
-    if (hasQuoteFieldErrors(errors)) {
-      applyValidationFailure(
-        errors,
-        firstQuoteFieldError(errors) ??
-          "Fix validation errors before changing status.",
+      await action(id);
+      const updated = getQuote(id);
+      if (!updated) {
+        throw new Error("Quote not found after lifecycle update.");
+      }
+      setDraft(updated);
+      setBaseline(updated);
+      setLastSavedAt(updated.updatedAt);
+      setFieldErrors({});
+      setStatusMessage(null);
+      if (updated.status === "Sent" && !updated.archived) {
+        setSentEditingUnlocked(false);
+      } else if (!updated.archived && updated.status === "Draft") {
+        setSentEditingUnlocked(true);
+      }
+      return updated;
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Failed to update quote.",
       );
-      setDraft(sanitized);
-      return false;
+      return null;
     }
-
-    const updated = apply(sanitized, today);
-    const savedQuote = upsertQuote(updated);
-    setDraft(savedQuote);
-    setBaseline(savedQuote);
-    setLastSavedAt(savedQuote.updatedAt);
-    setFieldErrors({});
-    setStatusMessage(null);
-    if (savedQuote.status === "Sent" && !savedQuote.archived) {
-      setSentEditingUnlocked(false);
-    } else if (!savedQuote.archived && savedQuote.status === "Draft") {
-      setSentEditingUnlocked(true);
-    }
-    return true;
   }
 
   function handleMarkSent() {
@@ -537,30 +570,9 @@ export function QuoteBuilderView({
       return;
     }
 
-    const frozenAt = toIsoDate(startOfDay(today));
-    let snapshot;
-    try {
-      snapshot = createQuotePdfSnapshot(sanitized, settings, frozenAt);
-    } catch (error) {
-      applyValidationFailure(
-        {},
-        error instanceof Error
-          ? error.message
-          : "Could not freeze the PDF snapshot.",
-      );
-      return;
-    }
+    const savedQuote = await persistThenLifecycle((id) => markSent(id));
+    if (!savedQuote) return;
 
-    const sent = markQuoteSent(sanitized, today, snapshot);
-    const savedQuote = upsertQuote(sent);
-    setDraft(savedQuote);
-    setBaseline(savedQuote);
-    setLastSavedAt(savedQuote.updatedAt);
-    setFieldErrors({});
-    setStatusMessage(null);
-    setSentEditingUnlocked(false);
-
-    // Keep create-route mounted until PDF finishes so ready/error UI is not lost.
     await runFinalAfterSend(savedQuote);
 
     if (mode === "create") {
@@ -568,22 +580,12 @@ export function QuoteBuilderView({
     }
   }
 
-  function confirmReturnToDraft() {
-    if (!recalculatedDraft || !today) return;
+  async function confirmReturnToDraft() {
+    if (!recalculatedDraft) return;
     setConfirm(null);
-
-    const sanitized = withRecalculatedTotals({
-      ...recalculatedDraft,
-      lineItems: stripEmptyLines(recalculatedDraft.lineItems),
+    await persistThenLifecycle((id) => returnToDraft(id), {
+      saveContentFirst: false,
     });
-    const updated = returnQuoteToDraft(sanitized, today);
-    const savedQuote = upsertQuote(updated);
-    setDraft(savedQuote);
-    setBaseline(savedQuote);
-    setLastSavedAt(savedQuote.updatedAt);
-    setFieldErrors({});
-    setStatusMessage(null);
-    setSentEditingUnlocked(true);
   }
 
   function requestStatusConfirm(
@@ -643,15 +645,23 @@ export function QuoteBuilderView({
     }
 
     const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
-    const copy = duplicate(
-      recalculatedDraft.id,
-      preparedBy !== undefined ? { preparedBy } : undefined,
-    );
-    if (copy) {
-      discardAndNavigate(`/quotes/${copy.id}/edit`);
-    } else {
-      setStatusMessage(settingsUnavailableMessage);
-    }
+    void (async () => {
+      try {
+        const copy = await duplicate(
+          recalculatedDraft.id,
+          preparedBy !== undefined ? { preparedBy } : undefined,
+        );
+        if (copy) {
+          discardAndNavigate(`/quotes/${copy.id}/edit`);
+        } else {
+          setStatusMessage(settingsUnavailableMessage);
+        }
+      } catch (error) {
+        setStatusMessage(
+          error instanceof Error ? error.message : "Failed to duplicate quote.",
+        );
+      }
+    })();
   }
 
   function handleDuplicateDirtyConfirm() {
@@ -660,24 +670,32 @@ export function QuoteBuilderView({
       setStatusMessage(settingsUnavailableMessage);
       return;
     }
-    const savedQuote = persistValidatedDraft();
-    if (!savedQuote) {
-      setConfirm({ type: "duplicateLastSaved" });
-      return;
-    }
-    if (mode === "create") {
-      router.replace(`/quotes/${savedQuote.id}/edit`);
-    }
-    const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
-    const copy = duplicate(
-      savedQuote.id,
-      preparedBy !== undefined ? { preparedBy } : undefined,
-    );
-    if (copy) {
-      discardAndNavigate(`/quotes/${copy.id}/edit`);
-    } else {
-      setStatusMessage(settingsUnavailableMessage);
-    }
+    void (async () => {
+      const savedQuote = await persistValidatedDraft();
+      if (!savedQuote) {
+        setConfirm({ type: "duplicateLastSaved" });
+        return;
+      }
+      if (mode === "create") {
+        router.replace(`/quotes/${savedQuote.id}/edit`);
+      }
+      const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
+      try {
+        const copy = await duplicate(
+          savedQuote.id,
+          preparedBy !== undefined ? { preparedBy } : undefined,
+        );
+        if (copy) {
+          discardAndNavigate(`/quotes/${copy.id}/edit`);
+        } else {
+          setStatusMessage(settingsUnavailableMessage);
+        }
+      } catch (error) {
+        setStatusMessage(
+          error instanceof Error ? error.message : "Failed to duplicate quote.",
+        );
+      }
+    })();
   }
 
   function handleDuplicateLastSavedConfirm() {
@@ -688,15 +706,23 @@ export function QuoteBuilderView({
       return;
     }
     const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
-    const copy = duplicate(
-      recalculatedDraft.id,
-      preparedBy !== undefined ? { preparedBy } : undefined,
-    );
-    if (copy) {
-      discardAndNavigate(`/quotes/${copy.id}/edit`);
-    } else {
-      setStatusMessage(settingsUnavailableMessage);
-    }
+    void (async () => {
+      try {
+        const copy = await duplicate(
+          recalculatedDraft.id,
+          preparedBy !== undefined ? { preparedBy } : undefined,
+        );
+        if (copy) {
+          discardAndNavigate(`/quotes/${copy.id}/edit`);
+        } else {
+          setStatusMessage(settingsUnavailableMessage);
+        }
+      } catch (error) {
+        setStatusMessage(
+          error instanceof Error ? error.message : "Failed to duplicate quote.",
+        );
+      }
+    })();
   }
 
   function handleAddCatalogItems(items: CatalogItem[]) {
@@ -761,7 +787,7 @@ export function QuoteBuilderView({
           description={
             mode === "create"
               ? "Build a draft quote. Nothing is saved until you choose a customer and save."
-              : `Editing ${recalculatedDraft.id}`
+              : `Editing ${recalculatedDraft.quoteNumber}`
           }
           actions={
             <Button
@@ -884,7 +910,7 @@ export function QuoteBuilderView({
                   }
                 />
                 <span className="text-sm text-text-secondary">
-                  {recalculatedDraft.id}
+                  {recalculatedDraft.quoteNumber}
                 </span>
               </div>
 
@@ -1166,11 +1192,7 @@ export function QuoteBuilderView({
             setStatusMessage(settingsUnavailableMessage);
             return;
           }
-          persistAndMutate((quote, day) => {
-            const frozenAt = toIsoDate(startOfDay(day));
-            const snapshot = createQuotePdfSnapshot(quote, settings, frozenAt);
-            return markQuoteSent(quote, day, snapshot);
-          });
+          void persistThenLifecycle((id) => markSent(id));
         }}
       />
 
@@ -1194,7 +1216,9 @@ export function QuoteBuilderView({
         confirmLabel="Return to Draft"
         tone="primary"
         onCancel={() => setConfirm(null)}
-        onConfirm={confirmReturnToDraft}
+        onConfirm={() => {
+          void confirmReturnToDraft();
+        }}
       />
 
       <ConfirmDialog
@@ -1206,7 +1230,7 @@ export function QuoteBuilderView({
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
-          persistAndMutate(markQuoteAccepted);
+          void persistThenLifecycle((id) => markAccepted(id));
         }}
       />
 
@@ -1219,7 +1243,7 @@ export function QuoteBuilderView({
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
-          persistAndMutate(markQuoteRejected);
+          void persistThenLifecycle((id) => markRejected(id));
         }}
       />
 
@@ -1232,7 +1256,9 @@ export function QuoteBuilderView({
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
-          persistAndMutate(markQuoteExpired);
+          void persistThenLifecycle((id) => markExpired(id), {
+            saveContentFirst: false,
+          });
         }}
       />
 
@@ -1253,10 +1279,9 @@ export function QuoteBuilderView({
             setStatusMessage(settingsUnavailableMessage);
             return;
           }
-          const defaults = getQuoteDefaults();
-          persistAndMutate((quote, day) =>
-            reactivateQuoteToDraft(quote, day, defaults),
-          );
+          void persistThenLifecycle((id) => reactivate(id), {
+            saveContentFirst: false,
+          });
         }}
       />
 
@@ -1269,7 +1294,9 @@ export function QuoteBuilderView({
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
-          persistAndMutate(archiveQuote);
+          void persistThenLifecycle((id) => archive(id), {
+            saveContentFirst: false,
+          });
         }}
       />
 
@@ -1282,7 +1309,9 @@ export function QuoteBuilderView({
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           setConfirm(null);
-          persistAndMutate(restoreQuote);
+          void persistThenLifecycle((id) => restore(id), {
+            saveContentFirst: false,
+          });
         }}
       />
 

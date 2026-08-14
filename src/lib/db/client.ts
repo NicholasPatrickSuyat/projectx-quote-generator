@@ -1,10 +1,13 @@
 /**
  * Server-only Neon + Drizzle client.
  * Never import this module from Client Components.
+ *
+ * Uses the WebSocket Pool driver so interactive transactions work
+ * (required for M19 quote create/update/duplicate/sent freezes).
  */
 
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { Pool } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
 import * as schema from "@/lib/db/schema";
 import {
   assertDatabaseUrlPresent,
@@ -17,8 +20,8 @@ assertServerModule("@/lib/db/client");
 export type AppDatabase = ReturnType<typeof createDb>;
 
 function createDb(databaseUrl: string) {
-  const sql = neon(databaseUrl);
-  return drizzle({ client: sql, schema });
+  const pool = new Pool({ connectionString: databaseUrl });
+  return drizzle({ client: pool, schema });
 }
 
 let cached: AppDatabase | null = null;

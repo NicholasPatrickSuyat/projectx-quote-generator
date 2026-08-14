@@ -186,7 +186,7 @@ export function buildPreviewPdfModel(
       pdfFooterText: settings.pdfFooterText,
     },
     quote: {
-      quoteId: quote.id,
+      quoteId: quote.quoteNumber,
       quoteDate: quote.quoteDate,
       validUntil: quote.validUntil,
       preparedBy: quote.preparedBy,

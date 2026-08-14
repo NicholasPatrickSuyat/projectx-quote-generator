@@ -43,7 +43,7 @@ export function CustomerSummary({
             {customerDisplayName(customer)}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
-            <span className="font-mono tabular-nums">{customer.id}</span>
+            <span className="font-mono tabular-nums">{customer.customerNumber}</span>
             <StatusBadge
               label={status}
               tone={status === "Active" ? "active" : "archived"}
@@ -71,7 +71,7 @@ export function CustomerSummary({
           ) : (
             <>
               <Link
-                href={`/quotes/new?customer=${customer.id}`}
+                href={`/quotes/new?customer=${customer.customerNumber}`}
                 className={buttonClassName({ variant: "primary", size: "sm" })}
               >
                 New Quote
@@ -160,7 +160,7 @@ export function CustomerSummary({
             Recent Quotes
           </h3>
           <Link
-            href={`/quotes?customer=${customer.id}`}
+            href={`/quotes?customer=${customer.customerNumber}`}
             className="text-sm font-medium text-primary hover:text-primary-hover"
           >
             View all
@@ -175,7 +175,7 @@ export function CustomerSummary({
             {customer.recentQuotes.map((quote) => (
               <li key={quote.id}>
                 <Link
-                  href={`/quotes?customer=${customer.id}`}
+                  href={`/quotes?customer=${customer.customerNumber}`}
                   className="flex flex-col gap-1 px-3 py-2.5 transition-colors duration-150 hover:bg-bg-muted sm:flex-row sm:items-center sm:justify-between"
                 >
                   <span className="font-medium text-text-primary">

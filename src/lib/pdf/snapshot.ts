@@ -63,7 +63,7 @@ export function createQuotePdfSnapshot(
       pdfFooterText: settings.pdfFooterText,
     },
     quote: {
-      quoteId: sanitized.id,
+      quoteId: sanitized.quoteNumber,
       quoteDate: sanitized.quoteDate,
       validUntil: sanitized.validUntil,
       preparedBy: sanitized.preparedBy,

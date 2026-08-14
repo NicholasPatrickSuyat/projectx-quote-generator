@@ -1,6 +1,8 @@
 import { DEMO_COMPANY_DEFAULTS, getDemoCompanySettings } from "@/lib/company/demo-defaults";
+import { DEMO_CUSTOMER_IDS } from "@/lib/customers/demo-data";
 import { withRecalculatedTotals } from "@/lib/quotes/calculations";
 import { createQuotePdfSnapshot } from "@/lib/pdf/snapshot";
+import { nextQuoteNumberFromExisting } from "@/lib/persistence/numbering";
 import { addDays, startOfDay, toIsoDate } from "@/lib/format";
 import type { Customer } from "@/types/customer";
 import { customerDisplayName } from "@/types/customer";
@@ -17,8 +19,28 @@ function daysFrom(today: Date, offset: number): string {
   return toIsoDate(addDays(startOfDay(today), offset));
 }
 
+/** Stable demo quote UUIDs (routes / session keys). */
+export const DEMO_QUOTE_IDS = {
+  quo1042: "b2001042-0000-4000-8000-000000001042",
+  quo1048: "b2001048-0000-4000-8000-000000001048",
+  quo1055: "b2001055-0000-4000-8000-000000001055",
+  quo1056: "b2001056-0000-4000-8000-000000001056",
+  quo1031: "b2001031-0000-4000-8000-000000001031",
+  quo1049: "b2001049-0000-4000-8000-000000001049",
+  quo1052: "b2001052-0000-4000-8000-000000001052",
+  quo1022: "b2001022-0000-4000-8000-000000001022",
+  quo1038: "b2001038-0000-4000-8000-000000001038",
+  quo1044: "b2001044-0000-4000-8000-000000001044",
+  quo1051: "b2001051-0000-4000-8000-000000001051",
+  quo1028: "b2001028-0000-4000-8000-000000001028",
+  quo1040: "b2001040-0000-4000-8000-000000001040",
+  quo1015: "b2001015-0000-4000-8000-000000001015",
+  quo1033: "b2001033-0000-4000-8000-000000001033",
+} as const;
+
 function snapshot(
   customerId: string,
+  customerNumber: string,
   customerName: string,
   companyName: string,
   phone: string,
@@ -30,6 +52,7 @@ function snapshot(
 ): QuoteCustomerSnapshot {
   return {
     customerId,
+    customerNumber,
     customerName,
     companyName,
     phone,
@@ -44,6 +67,7 @@ function snapshot(
 export function customerToSnapshot(customer: Customer): QuoteCustomerSnapshot {
   return {
     customerId: customer.id,
+    customerNumber: customer.customerNumber,
     customerName: customerDisplayName(customer),
     companyName: customer.companyName,
     phone: customer.phone,
@@ -55,7 +79,6 @@ export function customerToSnapshot(customer: Customer): QuoteCustomerSnapshot {
   };
 }
 
-let lineSeq = 0;
 function line(
   category: LineCategory,
   description: string,
@@ -64,9 +87,8 @@ function line(
   unit = "ea",
   internalNotes = "",
 ): Omit<QuoteLineItem, "lineTotal" | "sortOrder"> {
-  lineSeq += 1;
   return {
-    id: `LINE-${String(lineSeq).padStart(4, "0")}`,
+    id: crypto.randomUUID(),
     category,
     description,
     quantity,
@@ -78,6 +100,7 @@ function line(
 
 type SeedInput = {
   id: string;
+  quoteNumber: string;
   customer: QuoteCustomerSnapshot;
   jobDescription: string;
   status: QuoteStatus;
@@ -107,8 +130,8 @@ type SeedInput = {
  * One Accepted quote is also archived to exercise restore.
  */
 export function getDemoQuotes(today: Date = new Date()): Quote[] {
-  lineSeq = 0;
   const jane = snapshot(
+    DEMO_CUSTOMER_IDS.jane,
     "CUST-000001",
     "Jane Doe",
     "",
@@ -120,6 +143,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "75204",
   );
   const marcus = snapshot(
+    DEMO_CUSTOMER_IDS.marcus,
     "CUST-000002",
     "Marcus Nguyen",
     "Northline Offices",
@@ -131,6 +155,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "75024",
   );
   const elena = snapshot(
+    DEMO_CUSTOMER_IDS.elena,
     "CUST-000003",
     "Elena Ruiz",
     "",
@@ -142,6 +167,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "75040",
   );
   const david = snapshot(
+    DEMO_CUSTOMER_IDS.david,
     "CUST-000004",
     "David Chen",
     "Summit Dental Group",
@@ -153,6 +179,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "75080",
   );
   const priya = snapshot(
+    DEMO_CUSTOMER_IDS.priya,
     "CUST-000005",
     "Priya Patel",
     "",
@@ -164,6 +191,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "76010",
   );
   const owen = snapshot(
+    DEMO_CUSTOMER_IDS.owen,
     "CUST-000006",
     "Owen Brooks",
     "Oak & Iron Brewery",
@@ -175,6 +203,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "75061",
   );
   const sophia = snapshot(
+    DEMO_CUSTOMER_IDS.sophia,
     "CUST-000007",
     "Sophia Martinez",
     "BrightPath Academy",
@@ -186,6 +215,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "75035",
   );
   const liam = snapshot(
+    DEMO_CUSTOMER_IDS.liam,
     "CUST-000008",
     "Liam Foster",
     "",
@@ -197,6 +227,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
     "75235",
   );
   const ava = snapshot(
+    DEMO_CUSTOMER_IDS.ava,
     "CUST-000009",
     "Ava Kim",
     "Westfield Logistics",
@@ -212,7 +243,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
 
   const seeds: SeedInput[] = [
     {
-      id: "QUO-1042",
+      id: DEMO_QUOTE_IDS.quo1042,
+      quoteNumber: "QUO-1042",
       customer: jane,
       jobDescription: "Attic insulation and duct sealing",
       status: "Draft",
@@ -229,7 +261,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1048",
+      id: DEMO_QUOTE_IDS.quo1048,
+      quoteNumber: "QUO-1048",
       customer: marcus,
       jobDescription: "Rooftop package unit maintenance",
       status: "Draft",
@@ -245,7 +278,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1055",
+      id: DEMO_QUOTE_IDS.quo1055,
+      quoteNumber: "QUO-1055",
       customer: elena,
       jobDescription: "Thermostat upgrade and calibration",
       status: "Draft",
@@ -260,7 +294,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1056",
+      id: DEMO_QUOTE_IDS.quo1056,
+      quoteNumber: "QUO-1056",
       customer: david,
       jobDescription: "Dental suite condenser replacement",
       status: "Draft",
@@ -279,7 +314,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1031",
+      id: DEMO_QUOTE_IDS.quo1031,
+      quoteNumber: "QUO-1031",
       customer: owen,
       jobDescription: "Walk-in cooler compressor service",
       status: "Sent",
@@ -297,7 +333,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1049",
+      id: DEMO_QUOTE_IDS.quo1049,
+      quoteNumber: "QUO-1049",
       customer: sophia,
       jobDescription: "Campus HVAC seasonal startup",
       status: "Sent",
@@ -317,7 +354,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1052",
+      id: DEMO_QUOTE_IDS.quo1052,
+      quoteNumber: "QUO-1052",
       customer: ava,
       jobDescription: "Warehouse make-up air unit install",
       status: "Sent",
@@ -335,7 +373,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1022",
+      id: DEMO_QUOTE_IDS.quo1022,
+      quoteNumber: "QUO-1022",
       customer: marcus,
       jobDescription: "Office VRF zone expansion",
       status: "Accepted",
@@ -355,7 +394,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1038",
+      id: DEMO_QUOTE_IDS.quo1038,
+      quoteNumber: "QUO-1038",
       customer: jane,
       jobDescription: "Whole-home heat pump install",
       status: "Accepted",
@@ -374,7 +414,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1044",
+      id: DEMO_QUOTE_IDS.quo1044,
+      quoteNumber: "QUO-1044",
       customer: david,
       jobDescription: "Server room dedicated cooling",
       status: "Accepted",
@@ -394,7 +435,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1051",
+      id: DEMO_QUOTE_IDS.quo1051,
+      quoteNumber: "QUO-1051",
       customer: liam,
       jobDescription: "Furnace tune-up and filter package",
       status: "Accepted",
@@ -415,7 +457,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1028",
+      id: DEMO_QUOTE_IDS.quo1028,
+      quoteNumber: "QUO-1028",
       customer: priya,
       jobDescription: "Mini-split install for bonus room",
       status: "Rejected",
@@ -434,7 +477,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1040",
+      id: DEMO_QUOTE_IDS.quo1040,
+      quoteNumber: "QUO-1040",
       customer: owen,
       jobDescription: "Kitchen exhaust hood balancing",
       status: "Rejected",
@@ -453,7 +497,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1015",
+      id: DEMO_QUOTE_IDS.quo1015,
+      quoteNumber: "QUO-1015",
       customer: elena,
       jobDescription: "Evaporator coil replacement",
       status: "Expired",
@@ -472,7 +517,8 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
       ],
     },
     {
-      id: "QUO-1033",
+      id: DEMO_QUOTE_IDS.quo1033,
+      quoteNumber: "QUO-1033",
       customer: ava,
       jobDescription: "Dock door air curtain install",
       status: "Expired",
@@ -495,6 +541,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
   return seeds.map((seed) => {
     const base = {
       id: seed.id,
+      quoteNumber: seed.quoteNumber,
       customerSnapshot: seed.customer,
       jobDescription: seed.jobDescription,
       status: seed.status,
@@ -504,6 +551,7 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
           ? null
           : daysFrom(today, seed.validUntilOffset),
       preparedBy: seed.preparedBy,
+      preparedByUserId: null,
       internalNotes: seed.internalNotes ?? "",
       customerFacingMessage:
         seed.customerFacingMessage ?? defaults.customerFacingMessage,
@@ -560,29 +608,20 @@ export function getDemoQuotes(today: Date = new Date()): Quote[] {
   });
 }
 
-export function nextQuoteId(quotes: Quote[]): string {
-  const max = quotes.reduce((highest, quote) => {
-    const match = /^QUO-(\d+)$/.exec(quote.id);
-    if (!match) return highest;
-    return Math.max(highest, Number(match[1]));
-  }, 0);
-  const next = max + 1;
-  const width = Math.max(4, String(next).length);
-  return `QUO-${String(next).padStart(width, "0")}`;
+/** Next business quote number (QUO-…) from existing session records. */
+export function nextQuoteNumber(quotes: Quote[]): string {
+  return nextQuoteNumberFromExisting(quotes.map((quote) => quote.quoteNumber));
 }
 
-export function nextLineId(lines: QuoteLineItem[]): string {
-  const max = lines.reduce((highest, item) => {
-    const match = /^LINE-(\d+)$/.exec(item.id);
-    if (!match) return highest;
-    return Math.max(highest, Number(match[1]));
-  }, 0);
-  return `LINE-${String(max + 1).padStart(4, "0")}`;
+/** Allocate a new line-item UUID. */
+export function createLineId(): string {
+  return crypto.randomUUID();
 }
 
 /** Known demo customer snapshots (fallback when customer store not yet hydrated). */
 export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
   snapshot(
+    DEMO_CUSTOMER_IDS.jane,
     "CUST-000001",
     "Jane Doe",
     "",
@@ -594,6 +633,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "75204",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.marcus,
     "CUST-000002",
     "Marcus Nguyen",
     "Northline Offices",
@@ -605,6 +645,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "75024",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.elena,
     "CUST-000003",
     "Elena Ruiz",
     "",
@@ -616,6 +657,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "75040",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.david,
     "CUST-000004",
     "David Chen",
     "Summit Dental Group",
@@ -627,6 +669,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "75080",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.priya,
     "CUST-000005",
     "Priya Patel",
     "",
@@ -638,6 +681,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "76010",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.owen,
     "CUST-000006",
     "Owen Brooks",
     "Oak & Iron Brewery",
@@ -649,6 +693,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "75061",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.sophia,
     "CUST-000007",
     "Sophia Martinez",
     "BrightPath Academy",
@@ -660,6 +705,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "75035",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.liam,
     "CUST-000008",
     "Liam Foster",
     "",
@@ -671,6 +717,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "75235",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.ava,
     "CUST-000009",
     "Ava Kim",
     "Westfield Logistics",
@@ -682,6 +729,7 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
     "75063",
   ),
   snapshot(
+    DEMO_CUSTOMER_IDS.noah,
     "CUST-000010",
     "Noah Harris",
     "",
@@ -694,11 +742,17 @@ export const DEMO_CUSTOMER_SNAPSHOTS: QuoteCustomerSnapshot[] = [
   ),
 ];
 
+/**
+ * Look up a demo snapshot by customer UUID or business number (CUST-…).
+ */
 export function findCustomerSnapshot(
-  customerId: string,
+  customerIdOrNumber: string,
 ): QuoteCustomerSnapshot | null {
   return (
-    DEMO_CUSTOMER_SNAPSHOTS.find((item) => item.customerId === customerId) ??
-    null
+    DEMO_CUSTOMER_SNAPSHOTS.find(
+      (item) =>
+        item.customerId === customerIdOrNumber ||
+        item.customerNumber === customerIdOrNumber,
+    ) ?? null
   );
 }

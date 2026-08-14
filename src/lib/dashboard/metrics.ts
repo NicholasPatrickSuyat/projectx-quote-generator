@@ -120,7 +120,7 @@ export function getNeedsAttention(
     .slice(0, ATTENTION_LIMIT)
     .map((quote) => ({
       id: quote.id,
-      number: quote.id,
+      number: quote.quoteNumber,
       customerName: customerName(quote),
       meta: `Draft since ${formatShortDate(quote.createdAt)}`,
       href: `/quotes?attention=drafts-stale`,
@@ -138,7 +138,7 @@ export function getNeedsAttention(
     .slice(0, ATTENTION_LIMIT)
     .map((quote) => ({
       id: quote.id,
-      number: quote.id,
+      number: quote.quoteNumber,
       customerName: customerName(quote),
       meta: `Expires ${formatShortDate(quote.validUntil ?? quote.createdAt)}`,
       href: `/quotes?expiringSoon=1`,
@@ -150,7 +150,7 @@ export function getNeedsAttention(
     .slice(0, ATTENTION_LIMIT)
     .map((quote) => ({
       id: quote.id,
-      number: quote.id,
+      number: quote.quoteNumber,
       customerName: customerName(quote),
       meta: `Sent ${formatShortDate(quote.sentAt ?? quote.createdAt)}`,
       href: `/quotes?attention=awaiting-response`,

@@ -40,7 +40,7 @@ export function buildQuotePdfModel(input: {
 
   const fileName = buildQuotePdfFileName({
     companyName: input.settings.companyName,
-    quoteId: input.quote.id,
+    quoteId: input.quote.quoteNumber,
     quoteDate: input.quote.quoteDate,
     fallbackDate: todayIso,
     draft: true,

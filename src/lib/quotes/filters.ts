@@ -51,8 +51,10 @@ export function quoteMatchesSearch(quote: Quote, search: string): boolean {
   if (!q) return true;
   const haystack = [
     quote.id,
+    quote.quoteNumber,
     quote.customerSnapshot?.customerName ?? "",
     quote.customerSnapshot?.companyName ?? "",
+    quote.customerSnapshot?.customerNumber ?? "",
     quote.jobDescription,
     quote.preparedBy,
     quote.status,
@@ -137,7 +139,7 @@ export function sortQuotes(
     let cmp = 0;
     switch (sortKey) {
       case "quoteId":
-        cmp = a.id.localeCompare(b.id);
+        cmp = a.quoteNumber.localeCompare(b.quoteNumber);
         break;
       case "customer":
         cmp = (a.customerSnapshot?.customerName ?? "").localeCompare(

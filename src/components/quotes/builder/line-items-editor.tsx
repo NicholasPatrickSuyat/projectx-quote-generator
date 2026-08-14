@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { computeLineTotal } from "@/lib/quotes/calculations";
 import { createEmptyLine, moveLine } from "@/lib/quotes/mutations";
-import { nextLineId } from "@/lib/quotes/demo-data";
+import { createLineId } from "@/lib/quotes/demo-data";
 import { formatCurrency } from "@/lib/format";
 import {
   LINE_CATEGORIES,
@@ -70,7 +70,7 @@ export function LineItemsEditor({
   function duplicateLine(line: QuoteLineItem) {
     const copy: QuoteLineItem = {
       ...line,
-      id: nextLineId(lines),
+      id: createLineId(),
       sortOrder: lines.length,
       lineTotal: computeLineTotal(line.quantity, line.unitPrice),
     };

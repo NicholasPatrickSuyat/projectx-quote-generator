@@ -73,18 +73,19 @@ const SORT_COLUMN_MAP: Record<string, QuoteSortKey> = {
 
 function resolveCustomerFilterName(
   quotes: Quote[],
-  customerId: string | null,
+  /** Business customer number (CUST-…) from deep link, or null. */
+  customerNumber: string | null,
   existingName: string | "all",
 ): string | "all" {
   if (existingName !== "all") return existingName;
-  if (!customerId) return "all";
+  if (!customerNumber) return "all";
   const fromQuotes = quotes.find(
-    (quote) => quote.customerSnapshot?.customerId === customerId,
+    (quote) => quote.customerSnapshot?.customerNumber === customerNumber,
   );
   if (fromQuotes?.customerSnapshot) {
     return fromQuotes.customerSnapshot.customerName;
   }
-  const fromDemo = findCustomerSnapshot(customerId);
+  const fromDemo = findCustomerSnapshot(customerNumber);
   return fromDemo?.customerName ?? "all";
 }
 
@@ -296,61 +297,101 @@ export function QuotesView() {
     }
     setActionMessage(null);
     const preparedBy = preparedByFromSessionUser(currentUser?.fullName);
-    const copy = duplicate(
-      quote.id,
-      preparedBy !== undefined ? { preparedBy } : undefined,
-    );
-    if (copy) {
-      router.push(`/quotes/${copy.id}/edit`);
-    } else {
-      setActionMessage(settingsUnavailableMessage);
-    }
+    void (async () => {
+      try {
+        const copy = await duplicate(
+          quote.id,
+          preparedBy !== undefined ? { preparedBy } : undefined,
+        );
+        if (copy) {
+          router.push(`/quotes/${copy.id}/edit`);
+        } else {
+          setActionMessage(settingsUnavailableMessage);
+        }
+      } catch (error) {
+        setActionMessage(
+          error instanceof Error ? error.message : "Failed to duplicate quote.",
+        );
+      }
+    })();
   }
 
   function applyArchive(quote: Quote) {
-    archive(quote.id);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(quote.id);
-      return next;
-    });
+    void (async () => {
+      try {
+        await archive(quote.id);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(quote.id);
+          return next;
+        });
+      } catch (error) {
+        setActionMessage(
+          error instanceof Error ? error.message : "Failed to archive quote.",
+        );
+      }
+    })();
   }
 
   function applyRestore(quote: Quote) {
-    restore(quote.id);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(quote.id);
-      return next;
-    });
+    void (async () => {
+      try {
+        await restore(quote.id);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(quote.id);
+          return next;
+        });
+      } catch (error) {
+        setActionMessage(
+          error instanceof Error ? error.message : "Failed to restore quote.",
+        );
+      }
+    })();
   }
 
   function applyBulkArchive() {
     const ids = visibleSelectedIds();
     if (ids.length === 0) return;
-    for (const id of ids) {
-      const quote = quotes.find((item) => item.id === id);
-      if (quote && !quote.archived) archive(id);
-    }
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) next.delete(id);
-      return next;
-    });
+    void (async () => {
+      try {
+        for (const id of ids) {
+          const quote = quotes.find((item) => item.id === id);
+          if (quote && !quote.archived) await archive(id);
+        }
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.delete(id);
+          return next;
+        });
+      } catch (error) {
+        setActionMessage(
+          error instanceof Error ? error.message : "Failed to archive quotes.",
+        );
+      }
+    })();
   }
 
   function applyBulkRestore() {
     const ids = visibleSelectedIds();
     if (ids.length === 0) return;
-    for (const id of ids) {
-      const quote = quotes.find((item) => item.id === id);
-      if (quote && quote.archived) restore(id);
-    }
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) next.delete(id);
-      return next;
-    });
+    void (async () => {
+      try {
+        for (const id of ids) {
+          const quote = quotes.find((item) => item.id === id);
+          if (quote && quote.archived) await restore(id);
+        }
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.delete(id);
+          return next;
+        });
+      } catch (error) {
+        setActionMessage(
+          error instanceof Error ? error.message : "Failed to restore quotes.",
+        );
+      }
+    })();
   }
 
   function confirmPrimary() {
@@ -483,7 +524,7 @@ export function QuotesView() {
           type="checkbox"
           className="size-4 rounded border-border-default text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-hover"
           checked={selectedIds.has(row.id)}
-          aria-label={`Select ${row.id}`}
+          aria-label={`Select ${row.quoteNumber}`}
           onClick={(event) => event.stopPropagation()}
           onChange={() => toggleSelect(row.id)}
         />
@@ -495,7 +536,7 @@ export function QuotesView() {
       sortable: true,
       cell: (row) => (
         <span className="font-medium text-text-primary tabular-nums">
-          {row.id}
+          {row.quoteNumber}
         </span>
       ),
     },
@@ -578,7 +619,7 @@ export function QuotesView() {
       cell: (row) => (
         <RowActionsMenuSlot>
           <RowActionsMenu
-            label={`Actions for ${row.id}`}
+            label={`Actions for ${row.quoteNumber}`}
             items={quoteRowActions(row)}
           />
         </RowActionsMenuSlot>
@@ -594,14 +635,14 @@ export function QuotesView() {
       case "archive":
         return {
           title: "Archive quote?",
-          description: `${confirm.quote.id} will move to the Archived list. You can restore it later.`,
+          description: `${confirm.quote.quoteNumber} will move to the Archived list. You can restore it later.`,
           confirmLabel: "Archive",
           tone: "danger" as const,
         };
       case "restore":
         return {
           title: "Restore quote?",
-          description: `${confirm.quote.id} will return to ${confirm.quote.statusBeforeArchive ?? "Draft"} status.`,
+          description: `${confirm.quote.quoteNumber} will return to ${confirm.quote.statusBeforeArchive ?? "Draft"} status.`,
           confirmLabel: "Restore",
           tone: "primary" as const,
         };
@@ -868,7 +909,7 @@ export function QuotesView() {
                     onClick={() => openSummary(quote)}
                   >
                     <p className="font-semibold text-text-primary tabular-nums">
-                      {quote.id}
+                      {quote.quoteNumber}
                     </p>
                     <p className="mt-0.5 truncate text-sm text-text-secondary">
                       {quote.customerSnapshot?.customerName ?? "—"}
@@ -878,7 +919,7 @@ export function QuotesView() {
                     </p>
                   </button>
                   <RowActionsMenu
-                    label={`Actions for ${quote.id}`}
+                    label={`Actions for ${quote.quoteNumber}`}
                     items={quoteRowActions(quote)}
                   />
                 </div>
@@ -931,7 +972,7 @@ export function QuotesView() {
 
       <SlideOver
         open={panelOpen}
-        title={selectedQuote?.id ?? "Quote"}
+        title={selectedQuote?.quoteNumber ?? "Quote"}
         description={
           selectedQuote
             ? `${selectedQuote.customerSnapshot?.customerName ?? "No customer"} · ${selectedQuote.archived ? "Archived" : selectedQuote.status}`

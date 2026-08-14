@@ -1,9 +1,24 @@
+import { nextCustomerNumberFromExisting } from "@/lib/persistence/numbering";
 import { addDays, startOfDay, toIsoDate } from "@/lib/format";
 import type { Customer, CustomerFormValues } from "@/types/customer";
 
 function daysFrom(today: Date, offset: number): string {
   return toIsoDate(addDays(startOfDay(today), offset));
 }
+
+/** Stable demo UUIDs — quote seeds reference these as customerSnapshot.customerId. */
+export const DEMO_CUSTOMER_IDS = {
+  jane: "a1000001-0000-4000-8000-000000000001",
+  marcus: "a1000002-0000-4000-8000-000000000002",
+  elena: "a1000003-0000-4000-8000-000000000003",
+  david: "a1000004-0000-4000-8000-000000000004",
+  priya: "a1000005-0000-4000-8000-000000000005",
+  owen: "a1000006-0000-4000-8000-000000000006",
+  sophia: "a1000007-0000-4000-8000-000000000007",
+  liam: "a1000008-0000-4000-8000-000000000008",
+  ava: "a1000009-0000-4000-8000-000000000009",
+  noah: "a1000010-0000-4000-8000-000000000010",
+} as const;
 
 /** Identity/contact seed only — quote aggregates come from QuoteSession (M15). */
 type CustomerSeedCore = Omit<
@@ -31,7 +46,8 @@ function withNeutralAggregates(core: CustomerSeedCore): Customer {
 export function getDemoCustomers(today: Date = new Date()): Customer[] {
   const cores: CustomerSeedCore[] = [
     {
-      id: "CUST-000001",
+      id: DEMO_CUSTOMER_IDS.jane,
+      customerNumber: "CUST-000001",
       firstName: "Jane",
       lastName: "Doe",
       phone: "(214) 555-0142",
@@ -47,7 +63,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000002",
+      id: DEMO_CUSTOMER_IDS.marcus,
+      customerNumber: "CUST-000002",
       firstName: "Marcus",
       lastName: "Nguyen",
       phone: "(972) 555-0198",
@@ -63,7 +80,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000003",
+      id: DEMO_CUSTOMER_IDS.elena,
+      customerNumber: "CUST-000003",
       firstName: "Elena",
       lastName: "Ruiz",
       phone: "(469) 555-0117",
@@ -79,7 +97,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000004",
+      id: DEMO_CUSTOMER_IDS.david,
+      customerNumber: "CUST-000004",
       firstName: "David",
       lastName: "Chen",
       phone: "(214) 555-0166",
@@ -95,7 +114,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000005",
+      id: DEMO_CUSTOMER_IDS.priya,
+      customerNumber: "CUST-000005",
       firstName: "Priya",
       lastName: "Patel",
       phone: "(817) 555-0133",
@@ -111,7 +131,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000006",
+      id: DEMO_CUSTOMER_IDS.owen,
+      customerNumber: "CUST-000006",
       firstName: "Owen",
       lastName: "Brooks",
       phone: "(972) 555-0184",
@@ -127,7 +148,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000007",
+      id: DEMO_CUSTOMER_IDS.sophia,
+      customerNumber: "CUST-000007",
       firstName: "Sophia",
       lastName: "Martinez",
       phone: "(469) 555-0175",
@@ -143,7 +165,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000008",
+      id: DEMO_CUSTOMER_IDS.liam,
+      customerNumber: "CUST-000008",
       firstName: "Liam",
       lastName: "Foster",
       phone: "(214) 555-0109",
@@ -159,7 +182,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000009",
+      id: DEMO_CUSTOMER_IDS.ava,
+      customerNumber: "CUST-000009",
       firstName: "Ava",
       lastName: "Kim",
       phone: "(972) 555-0121",
@@ -175,7 +199,8 @@ export function getDemoCustomers(today: Date = new Date()): Customer[] {
       archived: false,
     },
     {
-      id: "CUST-000010",
+      id: DEMO_CUSTOMER_IDS.noah,
+      customerNumber: "CUST-000010",
       firstName: "Noah",
       lastName: "Harris",
       phone: "(469) 555-0150",
@@ -225,11 +250,14 @@ export function customerToFormValues(customer: Customer): CustomerFormValues {
   };
 }
 
-export function nextCustomerId(customers: Customer[]): string {
-  const max = customers.reduce((highest, customer) => {
-    const match = /^CUST-(\d+)$/.exec(customer.id);
-    if (!match) return highest;
-    return Math.max(highest, Number(match[1]));
-  }, 0);
-  return `CUST-${String(max + 1).padStart(6, "0")}`;
+/** Allocate a new internal customer UUID. */
+export function createCustomerId(): string {
+  return crypto.randomUUID();
+}
+
+/** Next business customer number (CUST-######) from existing session records. */
+export function nextCustomerNumber(customers: Customer[]): string {
+  return nextCustomerNumberFromExisting(
+    customers.map((customer) => customer.customerNumber),
+  );
 }

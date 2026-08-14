@@ -24,12 +24,17 @@ function parseAttention(value: string | null): QuoteAttentionFilter {
  *
  * Approved: create=1, expiringSoon=1, attention=…, customer=CUST-…, status=…
  * Legacy: action=new, expiring=7, stale=7
+ *
+ * `customerId` is the business customer number (CUST-…) used for preselect /
+ * filter resolution — not the internal UUID. Consumers should resolve via
+ * `customerNumber` when the value starts with CUST-.
  */
 export function parseQuotesSearchParams(
   params: URLSearchParams,
 ): {
   filters: QuoteFilters;
   create: boolean;
+  /** Business customer number (CUST-…), not UUID. */
   customerId: string | null;
 } {
   const filters: QuoteFilters = { ...DEFAULT_QUOTE_FILTERS };
@@ -40,7 +45,7 @@ export function parseQuotesSearchParams(
   }
 
   const customerId = params.get("customer");
-  // Customer id filter is applied after load via snapshot name; keep id for create/preselect.
+  // Customer number filter is applied after load via snapshot name; keep number for create/preselect.
   // Also support filtering by exact customer name if passed (rare).
   const customerName = params.get("customerName");
   if (customerName) {
